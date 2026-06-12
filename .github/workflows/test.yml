@@ -1,0 +1,104 @@
+# Per-platform CI for erika.
+#
+# Bootstrap path: check out this lib + botopink-lang, place this lib under
+# `botopink-lang/repository/erika/` so the multi-root resolver finds it
+# without extra config, then run `zig build test-libs -- --lib erika
+# --target <matrix.target>`.
+#
+# `BOTOPINK_LANG_REF` (repo variable, default `main`) lets the lib pin a
+# specific botopink-lang SHA during a compiler-version dance.
+name: test
+
+on:
+  push:
+    branches: [feat, master, main]
+  pull_request:
+    branches: [feat, master, main]
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LIB_NAME: erika
+  BOTOPINK_LANG_REPO: botopink/botopink-lang
+
+jobs:
+  test:
+    name: ${{ matrix.runner }} · ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-22.04, target: commonJS }
+          - { runner: ubuntu-22.04, target: erlang   }
+          - { runner: ubuntu-22.04, target: beam     }
+          - { runner: macos-14,     target: commonJS }
+          - { runner: macos-14,     target: erlang   }
+          - { runner: macos-14,     target: beam     }
+          - { runner: windows-2022, target: commonJS }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout this lib
+        uses: actions/checkout@v4
+        with:
+          path: self
+
+      - name: Checkout botopink-lang
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.BOTOPINK_LANG_REPO }}
+          ref: ${{ vars.BOTOPINK_LANG_REF || 'main' }}
+          path: botopink-lang
+
+      - name: Place lib under botopink-lang/repository/${{ env.LIB_NAME }}/
+        shell: bash
+        run: |
+          mkdir -p botopink-lang/repository
+          # rsync may not be available on the windows runner — fall back to
+          # cp -R; both produce a real tree (no symlink follow-through quirks).
+          if command -v rsync >/dev/null 2>&1; then
+            rsync -a --delete self/ "botopink-lang/repository/${LIB_NAME}/"
+          else
+            rm -rf "botopink-lang/repository/${LIB_NAME}"
+            cp -R self "botopink-lang/repository/${LIB_NAME}"
+          fi
+
+      - name: Install required runtimes (linux)
+        if: matrix.runner == 'ubuntu-22.04' && (matrix.target == 'erlang' || matrix.target == 'beam')
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y erlang
+
+      - name: Install required runtimes (macos)
+        if: matrix.runner == 'macos-14' && (matrix.target == 'erlang' || matrix.target == 'beam')
+        run: |
+          brew install erlang
+
+      - name: Install Node 20 (for commonJS target)
+        if: matrix.target == 'commonJS'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.16.0
+
+      - name: Print build identity
+        shell: bash
+        run: |
+          echo "lib:     ${LIB_NAME}"
+          echo "target:  ${{ matrix.target }}"
+          echo "runner:  ${{ matrix.runner }}"
+          echo "zig:     $(zig version)"
+          echo "ref:     ${{ vars.BOTOPINK_LANG_REF || 'main' }}"
+
+      - name: zig build install (botopink toolchain)
+        working-directory: botopink-lang
+        run: zig build install
+
+      - name: zig build test-libs --lib ${{ env.LIB_NAME }} --target ${{ matrix.target }}
+        working-directory: botopink-lang
+        run: zig build test-libs -- --lib "${LIB_NAME}" --target "${{ matrix.target }}"

@@ -196,6 +196,33 @@ per-kind sites.
   `repeat` build their arrays by **recursion** (the `Array.range`/`Array.repeat`
   producers aren't lowered by the commonJS backend).
 
+## CI
+
+Two workflows under `.github/workflows/`:
+
+| Workflow      | Trigger                  | What                                                                |
+| ------------- | ------------------------ | ------------------------------------------------------------------- |
+| `test.yml`    | push / PR (feat/master/main) | Matrix `{ubuntu-22.04, macos-14, windows-2022} × {commonJS, erlang, beam}` (windows = commonJS-only — `escript` ships cleanly only on linux + macos). Bootstrap path: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, then `zig build install && zig build test-libs -- --lib erika --target <t>`. `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `main`). |
+| `tag.yml`    | push to feat/master/main | Reads `version` from `botopink.json`. **feat** → moving `<version>-feat` tag (force-pushed on every push). **master/main** → immutable `<version>` tag (no-op on the same SHA; hard error if the version was not bumped). Uses the built-in `github.token`. |
+
+## Tagging — "release is a manifest change"
+
+`bpmp install erika` resolves through the tags `tag.yml` produces. To
+publish a new stable release:
+
+1. Bump `version` in `botopink.json` to the new SemVer.
+2. Push to `master` (or `main`). The workflow creates the immutable tag.
+
+If you push to `master` without bumping `version` and the previous
+`<version>` tag already exists on a different SHA, the workflow fails
+loudly with a "bump version in botopink.json to publish a new release"
+message. This is intentional — it forces every release to be visible in
+the manifest history.
+
+To preview unreleased work, set `requires.erika = "feat"` in the
+consuming project's `botopink.json` and run `bpmp sync` — bpmp will
+resolve to the moving `<version>-feat` tag.
+
 ## See also
 
 - The spec (intent, steps, test scenarios) → [`../../tasks/v0.beta.7/specs/erika.md`](../../tasks/v0.beta.7/specs/erika.md).

@@ -1,5 +1,7 @@
 # erika
 
+[![CI](https://github.com/botopink/erika/actions/workflows/test.yml/badge.svg?branch=feat)](https://github.com/botopink/erika/actions/workflows/test.yml)
+
 > C#/LINQ-style query library for botopink — a fluent, eager, immutable
 > `Query<T>` over `Array<T>`, plus an `erika "…"` SQL-subset template fn.
 
