@@ -1,0 +1,11 @@
+{
+  "name": "erika",
+  "version": "0.0.1",
+  "description": "C#/LINQ-style fluent Query<T> + an `erika \"…\"` SQL-subset template fn — pure botopink over Array<T>, reached via `from \"erika\"`",
+  "target": "commonJS",
+  "src": "src/",
+  "files": [
+    "root.bp",
+    "erika.bp"
+  ]
+}
