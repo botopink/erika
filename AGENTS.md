@@ -228,3 +228,28 @@ resolve to the moving `<version>-feat` tag.
 - The spec (intent, steps, test scenarios) → [`../../tasks/v0.beta.7/specs/erika.md`](../../tasks/v0.beta.7/specs/erika.md).
 - The generic loader erika is a client of → [`../botopink-lang/modules/compiler-cli/src/cli/libs.zig`](../botopink-lang/modules/compiler-cli/src/cli/AGENTS.md).
 - The decorator-driven sibling client → [`../rakun/AGENTS.md`](../rakun/AGENTS.md).
+
+## Local gate
+
+`scripts/git-hooks/pre-commit` is the tracked source of truth for the
+local pre-commit gate. Two install paths:
+
+- **From the meta workspace** — run `scripts/install-hooks.sh` at the
+  root of [botopink/projects][meta]. It walks `.gitmodules` and
+  symlinks the meta's hook plus a shim into every submodule's git dir,
+  so a commit in this lib delegates to the shared
+  [`lib/runners/bp-lib.sh`][bp-lib] runner.
+- **From a standalone clone** — run `scripts/install-hooks.sh` (when
+  this lib ships one) or symlink `scripts/git-hooks/pre-commit` into
+  `.git/hooks/pre-commit` manually. The shim falls back to the
+  self-contained `scripts/git-hooks/lib/runner-standalone.sh` so the
+  gate works without the meta nearby.
+
+The gate runs `botopink test` over `src/` + `test/`. The compiler
+binary is located via (in order) `$BOTOPINK_BIN`, the nearest
+ancestor `repository/botopink-lang/zig-out/bin/botopink`, then
+`$PATH`. If none resolve, the gate prints a yellow warning and exits
+0 — CI runs the full suite and catches any regression there.
+
+[meta]: https://github.com/botopink/projects
+[bp-lib]: https://github.com/botopink/projects/blob/feat/scripts/git-hooks/lib/runners/bp-lib.sh
