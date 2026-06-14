@@ -32,7 +32,7 @@ erika/
                          DEFAULT surface — the `import erika` handle)
     └── erika.bp       ← the whole lib: `record Query<T>` + `Grouping<K,V>` +
                          constructors + the `pub default fn erika` template fn
-                         (lexer + parser + dual lowering) + 29 tests
+                         (lexer + parser + dual lowering) + in-file tests
 ```
 
 ## Module tree (`root.bp`) + the package handle
@@ -77,7 +77,7 @@ Both `root.bp` and `erika.bp` are listed in `botopink.json` `files` — the
   `q.build(...)`. Behaviour is **byte-for-byte the same** as the pre-refactor
   scanner (single-field projection unwraps, multi-field → `record {…}`, `*` →
   `toArray()`, `=`→`==`, `<>`→`!=`, `and`→`&&`, `'x'`→`"x"`), so runtime/codegen
-  across all backends is unchanged and the ~30 in-file + `examples/erika-linq`
+  across all backends is unchanged and the in-file + `examples/erika-linq`
   tests stay green.
 - **Lowering ④ → `CustomNode` for tooling (sublanguage-lsp).** Walks the same
   tokens into a generic reference tree: keywords → `keyword`, idents
@@ -98,7 +98,7 @@ Both `root.bp` and `erika.bp` are listed in `botopink.json` `files` — the
   resolves `dependencies: ["erika"]` to `repository/erika/src/erika.bp` as the
   `erika/erika` package module via the multi-root walk. No per-lib registry,
   no embed.
-- **Tests live here.** 25 `test { … }` blocks inside `src/erika.bp`, run by
+- **Tests live here.** `test { … }` blocks inside `src/erika.bp`, run by
   `botopink test` from this directory — not in the compiler's Zig suites. The
   cross-module consumer story lives in [`./examples/erika-linq/`](examples/erika-linq/)
   (`botopink test` green there too).
@@ -147,7 +147,7 @@ array`. The lexer therefore emits every token through a **single** `append` site
 (the `pending` flush), classifying the kind there rather than at distinct
 per-kind sites.
 
-## Status (v0.beta.8)
+## Status
 
 - **Fluent layer** — complete; all ops covered by tests.
 - **`selectMany` (flatMap)** — **landed.** Selector typed `fn(item: T) -> Array<U>`;
