@@ -48,7 +48,11 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: ${{ env.BOTOPINK_LANG_REPO }}
-          ref: ${{ vars.BOTOPINK_LANG_REF || 'main' }}
+          # Default to `feat`: erika consumes bleeding-edge compiler features
+          # (`${expr}` interpolation in `erika "…"` templates landed via §G1
+          # on `feat`; `main` lags). Override via the `BOTOPINK_LANG_REF`
+          # repo variable once `main` catches up.
+          ref: ${{ vars.BOTOPINK_LANG_REF || 'feat' }}
           path: botopink-lang
 
       - name: Place lib under botopink-lang/repository/${{ env.LIB_NAME }}/
