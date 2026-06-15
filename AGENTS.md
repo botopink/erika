@@ -190,11 +190,19 @@ per-kind sites.
   runtime call and queries any `var` or `val` array (covered by the
   `select over a var listas …` tests). Making the string form see `var`s is
   comptime scope-snapshot work in core — out of scope here.
-- **Interpolated queries** (`erika "… where age >= ${min}"` via `q.parts()`
-  Text/Interp) — the next extension, unchanged from v0.beta.6. Record, don't build.
+- **Runtime-string form** (`var s = "select …"; erika s`) — pending.
+  Needs a generic compiler mechanism (the call site captures a comptime
+  scope-snapshot for a runtime `string` view, and the template body re-runs
+  on that runtime payload). No erika-specific code in core. Deferred to a
+  follow-up.
 - **`average`** takes an `f64` selector (no `i32 → f64` cast exists); `range` /
   `repeat` build their arrays by **recursion** (the `Array.range`/`Array.repeat`
   producers aren't lowered by the commonJS backend).
+- **Hole-span fidelity in `${…}` form.** A holed template's lex span tracks the
+  *flattened* SQL (placeholder identifier inlined), so tokens that follow a hole
+  are reported at offsets shifted by the placeholder length, not the original
+  `${…}` byte position. The `q.custom` reference tree is still well-formed; LSP
+  hover/go-to-def on tokens that precede every hole is exact. v1 acceptable.
 
 ## CI
 
