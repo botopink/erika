@@ -1,1 +1,11 @@
-{ "name": "erika-linq", "version": "0.0.1", "target": "commonJS", "dependencies": ["erika"] }
+{
+    "name": "erika-linq",
+    "version": "0.0.1",
+    "target": "commonJS",
+    "dependencies": {
+        "erika": {
+            "git": "https://github.com/botopink/erika.git",
+            "branch": "feat"
+        }
+    }
+}
