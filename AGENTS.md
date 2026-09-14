@@ -32,7 +32,7 @@ erika/
                          DEFAULT surface — the `import erika` handle)
     └── erika.bp       ← the whole lib: `record Query<T>` + `Grouping<K,V>` +
                          constructors + the `pub default fn erika` template fn
-                         (lexer + parser + dual lowering) + 29 tests
+                         (lexer + parser + dual lowering) + in-file tests
 ```
 
 ## Module tree (`root.bp`) + the package handle
@@ -77,7 +77,7 @@ Both `root.bp` and `erika.bp` are listed in `botopink.json` `files` — the
   `q.build(...)`. Behaviour is **byte-for-byte the same** as the pre-refactor
   scanner (single-field projection unwraps, multi-field → `record {…}`, `*` →
   `toArray()`, `=`→`==`, `<>`→`!=`, `and`→`&&`, `'x'`→`"x"`), so runtime/codegen
-  across all backends is unchanged and the ~30 in-file + `examples/erika-linq`
+  across all backends is unchanged and the in-file + `examples/erika-linq`
   tests stay green.
 - **Lowering ④ → `CustomNode` for tooling (sublanguage-lsp).** Walks the same
   tokens into a generic reference tree: keywords → `keyword`, idents
@@ -98,7 +98,7 @@ Both `root.bp` and `erika.bp` are listed in `botopink.json` `files` — the
   resolves `dependencies: ["erika"]` to `repository/erika/src/erika.bp` as the
   `erika/erika` package module via the multi-root walk. No per-lib registry,
   no embed.
-- **Tests live here.** 25 `test { … }` blocks inside `src/erika.bp`, run by
+- **Tests live here.** `test { … }` blocks inside `src/erika.bp`, run by
   `botopink test` from this directory — not in the compiler's Zig suites. The
   cross-module consumer story lives in [`./examples/erika-linq/`](examples/erika-linq/)
   (`botopink test` green there too).
@@ -147,7 +147,7 @@ array`. The lexer therefore emits every token through a **single** `append` site
 (the `pending` flush), classifying the kind there rather than at distinct
 per-kind sites.
 
-## Status (v0.beta.8)
+## Status
 
 - **Fluent layer** — complete; all ops covered by tests.
 - **`selectMany` (flatMap)** — **landed.** Selector typed `fn(item: T) -> Array<U>`;
@@ -190,14 +190,74 @@ per-kind sites.
   runtime call and queries any `var` or `val` array (covered by the
   `select over a var listas …` tests). Making the string form see `var`s is
   comptime scope-snapshot work in core — out of scope here.
-- **Interpolated queries** (`erika "… where age >= ${min}"` via `q.parts()`
-  Text/Interp) — the next extension, unchanged from v0.beta.6. Record, don't build.
+- **Runtime-string form** (`var s = "select …"; erika s`) — pending.
+  Needs a generic compiler mechanism (the call site captures a comptime
+  scope-snapshot for a runtime `string` view, and the template body re-runs
+  on that runtime payload). No erika-specific code in core. Deferred to a
+  follow-up.
 - **`average`** takes an `f64` selector (no `i32 → f64` cast exists); `range` /
   `repeat` build their arrays by **recursion** (the `Array.range`/`Array.repeat`
   producers aren't lowered by the commonJS backend).
+- **Hole-span fidelity in `${…}` form.** A holed template's lex span tracks the
+  *flattened* SQL (placeholder identifier inlined), so tokens that follow a hole
+  are reported at offsets shifted by the placeholder length, not the original
+  `${…}` byte position. The `q.custom` reference tree is still well-formed; LSP
+  hover/go-to-def on tokens that precede every hole is exact. v1 acceptable.
+
+## CI
+
+Two workflows under `.github/workflows/`:
+
+| Workflow      | Trigger                  | What                                                                |
+| ------------- | ------------------------ | ------------------------------------------------------------------- |
+| `test.yml`    | push / PR (feat/master/main) | Matrix `{ubuntu-22.04, macos-14, windows-2022} × {commonJS, erlang, beam}` (windows = commonJS-only — `escript` ships cleanly only on linux + macos). Bootstrap path: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, then `zig build install && zig build test-libs -- --lib erika --target <t>`. `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `main`). |
+| `tag.yml`    | push to feat/master/main | Reads `version` from `botopink.json`. **feat** → moving `<version>-feat` tag (force-pushed on every push). **master/main** → immutable `<version>` tag (no-op on the same SHA; hard error if the version was not bumped). Uses the built-in `github.token`. |
+
+## Tagging — "release is a manifest change"
+
+`bpmp install erika` resolves through the tags `tag.yml` produces. To
+publish a new stable release:
+
+1. Bump `version` in `botopink.json` to the new SemVer.
+2. Push to `master` (or `main`). The workflow creates the immutable tag.
+
+If you push to `master` without bumping `version` and the previous
+`<version>` tag already exists on a different SHA, the workflow fails
+loudly with a "bump version in botopink.json to publish a new release"
+message. This is intentional — it forces every release to be visible in
+the manifest history.
+
+To preview unreleased work, set `requires.erika = "feat"` in the
+consuming project's `botopink.json` and run `bpmp sync` — bpmp will
+resolve to the moving `<version>-feat` tag.
 
 ## See also
 
 - The spec (intent, steps, test scenarios) → [`../../tasks/v0.beta.7/specs/erika.md`](../../tasks/v0.beta.7/specs/erika.md).
 - The generic loader erika is a client of → [`../botopink-lang/modules/compiler-cli/src/cli/libs.zig`](../botopink-lang/modules/compiler-cli/src/cli/AGENTS.md).
 - The decorator-driven sibling client → [`../rakun/AGENTS.md`](../rakun/AGENTS.md).
+
+## Local gate
+
+`scripts/git-hooks/pre-commit` is the tracked source of truth for the
+local pre-commit gate. Two install paths:
+
+- **From the meta workspace** — run `scripts/install-hooks.sh` at the
+  root of [botopink/projects][meta]. It walks `.gitmodules` and
+  symlinks the meta's hook plus a shim into every submodule's git dir,
+  so a commit in this lib delegates to the shared
+  [`lib/runners/bp-lib.sh`][bp-lib] runner.
+- **From a standalone clone** — run `scripts/install-hooks.sh` (when
+  this lib ships one) or symlink `scripts/git-hooks/pre-commit` into
+  `.git/hooks/pre-commit` manually. The shim falls back to the
+  self-contained `scripts/git-hooks/lib/runner-standalone.sh` so the
+  gate works without the meta nearby.
+
+The gate runs `botopink test` over `src/` + `test/`. The compiler
+binary is located via (in order) `$BOTOPINK_BIN`, the nearest
+ancestor `repository/botopink-lang/zig-out/bin/botopink`, then
+`$PATH`. If none resolve, the gate prints a yellow warning and exits
+0 — CI runs the full suite and catches any regression there.
+
+[meta]: https://github.com/botopink/projects
+[bp-lib]: https://github.com/botopink/projects/blob/feat/scripts/git-hooks/lib/runners/bp-lib.sh

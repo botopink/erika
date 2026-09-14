@@ -354,7 +354,19 @@ pub fn repeat<T>(value: T, times: i32) -> Query<T> {
 // sentinels (no `?T` Option runtime); compound booleans live in a `val` before
 // any `if (…)`.
 pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
-    val sql = q.text();
+    // ① Materialize the SQL source from the template's parts. A literal call
+    // (`erika "select …"`) collapses to a single Text part; a holed call
+    // (`erika "select … where id = ${uid}"`) yields alternating Text + Interp
+    // parts. Each Interp's `code` field is the hole's placeholder identifier
+    // (e.g. `__bp_hole_q_0`) — splicing it into the augmented SQL makes the
+    // hole behave like an ordinary operand at lex/parse time; the lowering's
+    // operandCode detects the placeholder prefix and emits it verbatim so
+    // `infer.substituteHoles` swaps in the caller's expression after build().
+    var sql = "";
+    loop (q.parts()) { p ->
+        if (p.kind == "Text") { sql = sql + p.text; };
+        if (p.kind == "Interp") { sql = sql + p.code; };
+    };
     val sqlLen = sql.split("").length;
     // Trailing space forces the final token to flush at the end of the scan
     // (bound to a `val` first — the comptime parser rejects `(expr).method()`).
@@ -363,8 +375,18 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     val blankTok = record { kind: "", text: "", span: Span(0, 0, 1) };
 
     // ── local helpers (lowering ③) ────────────────────────────────────────────
+    // A token's text starts with `__bp_hole_` exactly when it tracks a `${…}`
+    // hole spliced via `q.parts()` (the prefix is reserved by the runtime
+    // template-eval prelude). The lexer classifies it as an `ident`; here we
+    // emit it as a bare JS expression so the post-build `substituteHoles` pass
+    // swaps in the caller's expression with no further wrapping.
+    val isHolePlaceholder = { txt ->
+        val out = if (txt.split("").length < 10) { false; } else { txt.slice(0, 10) == "__bp_hole_"; };
+        out;
+    };
     val operandCode = { knd, txt ->
-        val out = if (knd == "string") { "\"" + txt.split("'").join("") + "\""; } else { if (knd == "number") { txt; } else { "row." + txt; }; };
+        val isHole = isHolePlaceholder(txt);
+        val out = if (isHole) { txt; } else { if (knd == "string") { "\"" + txt.split("'").join("") + "\""; } else { if (knd == "number") { txt; } else { "row." + txt; }; }; };
         out;
     };
     val opCode = { opText ->
@@ -749,6 +771,23 @@ test "erika query: where precedence is or over and over comparison" {
 test "erika query: not-equal operator <> maps to !=" {
     val notLyon = erika "select name from erikaCities where name <> 'Lyon' order by name asc";
     assert notLyon.join(",") == "Nice,Paris";
+}
+
+// §G1 — `${expr}` interpolations inside the SQL string become runtime operands
+// (the lex/parse stage threads each hole's placeholder identifier through as if
+// it were an ordinary token; `operandCode` emits it verbatim, so the host's
+// `substituteHoles` pass swaps in the caller's expression after `q.build(…)`).
+test "erika query: ${} interp inlines a runtime value as the right-hand operand" {
+    val threshold = 5;
+    val names = erika "select name from erikaCities where pop >= ${threshold} order by name asc";
+    assert names.join(",") == "Lyon,Paris";
+}
+
+test "erika query: ${} interp inlines a runtime value on both sides" {
+    val limit = 9;
+    val ge = 5;
+    val mid = erika "select name from erikaCities where pop >= ${ge} and pop <= ${limit} order by name asc";
+    assert mid.join(",") == "Lyon,Paris";
 }
 
 

@@ -104,9 +104,12 @@ so the two forms parse identically.
   the caller's comptime scope snapshot, which captures immutable `val` bindings
   only. The fluent `of(listas)` / `erika.of(listas)` form queries any `var`/`val`.
 
-> Cross-module `erika "…"` after `import {erika} from "erika"` now resolves — the
-> generic-loader-binding keystone (v0.beta.8) binds the bare imported template fn.
-> A runnable consumer lives at [`./examples/erika-linq/`](examples/erika-linq/).
+> Cross-module `erika "…"` resolves through the package-handle binding — a
+> consumer writes `import erika, {of} from "erika"`, and the `erika` handle
+> binds the package's `pub default fn` (`package-default-dsl`, v0.beta.14;
+> the underlying bare-imported template-fn binding landed earlier in
+> v0.beta.8 via the generic-loader-binding keystone). A runnable consumer
+> lives at [`./examples/erika-linq/`](examples/erika-linq/).
 
 ## See also
 

@@ -1,5 +1,7 @@
 # erika
 
+[![CI](https://github.com/botopink/erika/actions/workflows/test.yml/badge.svg?branch=feat)](https://github.com/botopink/erika/actions/workflows/test.yml)
+
 > C#/LINQ-style query library for botopink — a fluent, eager, immutable
 > `Query<T>` over `Array<T>`, plus an `erika "…"` SQL-subset template fn.
 
@@ -9,18 +11,22 @@ backing. Reached via `from "erika"`.
 ## Install
 
 ```bp
-import {from, Query} from "erika";
+import erika, {of, Query} from "erika";
 ```
+
+`erika` is the package handle (binds the `erika "…"` template). `of`
+constructs a `Query<T>` over an `Array<T>` — `from` is the import keyword
+and cannot name a function, so the wrapper is spelled `of`.
 
 ## Forms
 
 **Fluent**:
 
 ```bp
-val adults = from(people)
-    .where(p => p.age >= 18)
-    .orderBy(p => p.name)
-    .select(p => p.name)
+val adults = of(people)
+    .where({ p -> p.age >= 18 })
+    .orderBy({ p -> p.name })
+    .select({ p -> p.name })
     .toArray();
 ```
 
