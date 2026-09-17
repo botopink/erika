@@ -140,3 +140,16 @@ jobs:
         working-directory: botopink-lang
         shell: bash
         run: botopink-lib-test --lib "${LIB_NAME}" --target "${{ matrix.target }}"
+
+      # Every examples/*/ with a botopink.json builds (runExamplesGate, the same
+      # stage as the pre-commit hook); scripts/known-broken-examples.txt lists
+      # the ones allowed to fail. Each example uses its own manifest target, so
+      # this runs once, not per target.
+      - name: Examples build
+        if: matrix.target == 'commonJS'
+        working-directory: botopink-lang/repository/${{ env.LIB_NAME }}
+        shell: bash
+        run: |
+          source scripts/git-hooks/lib/runner-standalone.sh
+          bin=$(locateBotopink) || { echo "botopink binary not found"; exit 1; }
+          runExamplesGate "$bin"

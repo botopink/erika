@@ -3,7 +3,8 @@
 #
 # Sourced by scripts/git-hooks/pre-commit. It is the only runner: it needs
 # nothing outside this repository (standalone clone, meta checkout, worktree,
-# bpmp packing). Stages: conflict markers in staged files, then `botopink test`.
+# bpmp packing). Stages: conflict markers in staged files, `botopink test`,
+# then `botopink build` of every example (runExamplesGate — CI calls it too).
 set -euo pipefail
 
 RED='\033[0;31m'
@@ -78,5 +79,58 @@ runStandaloneGate() {
         echo
         echo "  Re-run for failure output:  ( cd $root && $bin test )"
         fail "$(basename "$root"): botopink test failed"
+    fi
+
+    # 3. every example builds, unless listed as known broken.
+    runExamplesGate "$bin"
+}
+
+# runExamplesGate <botopink-bin>
+#
+# Builds every `examples/*/` that has a `botopink.json` (each with its own
+# manifest target, into a throwaway --out). `scripts/known-broken-examples.txt`
+# lists the examples allowed to fail — one `examples/<name>  <reason>` per
+# line, `#` comments. The list cannot rot: a listed example that builds, or a
+# listed path that no longer exists, fails the gate too.
+runExamplesGate() {
+    local bin="$1"
+    local root
+    root=$(git rev-parse --show-toplevel)
+    local list="$root/scripts/known-broken-examples.txt"
+    local known=""
+    if [ -f "$list" ]; then
+        known=$(grep -vE '^[[:space:]]*(#|$)' "$list" | awk '{print $1}')
+    fi
+    local k
+    for k in $known; do
+        [ -f "$root/$k/botopink.json" ] || fail "$list names $k, which has no botopink.json — delete its line"
+    done
+    local dir name rel out bad=""
+    for dir in "$root"/examples/*/; do
+        [ -f "$dir/botopink.json" ] || continue
+        name=$(basename "$dir")
+        rel="examples/$name"
+        out=$(mktemp -d)
+        echo -n "  Building $rel (botopink build)... "
+        if ( cd "$dir" && "$bin" build --out "$out" ) >/dev/null 2>&1; then
+            if printf '%s\n' "$known" | grep -qx "$rel"; then
+                echo -e "${RED}✗${NC}"
+                bad="$bad\n  $rel builds but is listed in scripts/known-broken-examples.txt — delete its line"
+            else
+                echo -e "${GREEN}✓${NC}"
+            fi
+        else
+            if printf '%s\n' "$known" | grep -qx "$rel"; then
+                echo -e "${YELLOW}known broken${NC}"
+            else
+                echo -e "${RED}✗${NC}"
+                bad="$bad\n  $rel does not build — re-run: ( cd $dir && $bin build --out \$(mktemp -d) )"
+            fi
+        fi
+        rm -rf "$out"
+    done
+    if [ -n "$bad" ]; then
+        echo -e "$bad"
+        fail "$(basename "$root"): examples gate failed"
     fi
 }
