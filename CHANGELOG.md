@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **MIT license.** `LICENSE` (`Copyright (c) 2026 Eric Fillipe and botopink
+  contributors`) backs the README's License section, which now points at it.
+
 - The pre-commit hook is self-contained: the dead delegation to a meta
   workspace runner is gone, and `AGENTS.md` documents the install
   (`git config core.hooksPath scripts/git-hooks`) instead of a
