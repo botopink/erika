@@ -57,7 +57,8 @@ Both `root.bp` and `erika.bp` are listed in `botopink.json` `files` — the
   Terminals return scalars, `?T`, or `Array<T>`.
 - **Constructors** are top-level `pub fn` (`of`/`range`/`repeat`/`empty`). `from`
   is the import keyword and cannot name a function, so the wrapper is `of`.
-- **No arity overloading** (the JS backend mangles same-named methods), so the
+- **No arity overloading** (on commonJS the later of two same-named methods
+  replaces the earlier one — still true at `feat`), so the
   predicate variants are spelled out: `count`/`countWhere`, `first`/`firstWhere`,
   `any`/`anyWhere`.
 - **`erika "…"`** is a template fn returning **`@ExprCustom<T>`**: it captures a
@@ -107,45 +108,81 @@ Both `root.bp` and `erika.bp` are listed in `botopink.json` `files` — the
 
 ## Comptime-eval constraint (why the `erika "…"` parser is written the way it is)
 
-The `erika "…"` body runs at comptime in `template_eval.zig`: the evaluator emits
-**only the template fn itself** (over a *minimal* `node` prelude that defines just
-`Span` / `CustomNode`) and runs it. This shapes the whole front-end:
+The `erika "…"` body runs at comptime in the **persistent Erlang runtime** — the
+only comptime evaluator (`../botopink-lang/modules/compiler-core/src/comptime/`
+`template_eval.zig` → `runtime/persistent_erl.zig`). `template_eval.zig` lowers
+**only the template fn itself** with `codegen/erlang.zig` `emitComptimeModule`
+(untyped: the body carries no inferred types), appends the host glue, writes
+`.botopinkbuild/tmp/template/template_<hash>.erl`, and the persistent `erl`
+server compiles and runs its `main/0`. Every rule below was re-checked against a
+compiler built from botopink-lang `feat` at the comptime-dispatch merge (1.0.2-beta),
+and the loop rule again after the `String.split("")` fix (1.0.4-beta);
+each one names the constraint that still justifies it.
 
-- **No sibling calls, no named-record constructors.** Only `erika` is emitted, so
-  the lexer/parser/lowering are all **inlined** in one fn body (helpers are local
-  closures, `val f = { … }`), and the private SQL "AST" is modelled with
-  **anonymous `record { … }`** values (which lower to plain JS object literals) —
-  a named `record Token {…}` would emit `new Token(…)`, undefined in the eval.
-- **Native-JS ops only:** `split` / `join` / `slice` / `map` / `filter` / `append`
-  / `+` / `==`, plus array `.length` (a *property*). Host-helper-backed ops are
-  **undefined** in the eval script (they fail the expansion as a terse "parse
-  error") — notably optional `.at(i).unwrapOr(…)`, so positional access into a
-  small token list is a counter `loop (toks) { t, idx -> }` (the two-param form
-  binds the **index**), and "optional" `where`/`order` are 0-length-list sentinels.
-- **`string.length()`** (a method needing a JS-property rename) does **not** exist
-  in the bare prelude — use `s.split("").length` (an array property) for a
-  string's length (`sqlLen`).
+What the body may call:
+
+- **The capture's host functions** — `q.text()`, `q.parts()`, `q.source()`,
+  `q.context()`, `q.bindings()`, `q.lookup(name)` (a binding map or `undefined`),
+  `q.build(code)`, `q.custom(tree, code)`, `q.fail(msg)`, `q.failAt(span, msg)`,
+  plus `@compilerError`/`@expr`/`@code` — and the host records `Span`,
+  `CustomNode`, `Binding`, `Source`, `Context`, whose constructors build maps.
+- **Primitive methods on strings and arrays** — `split`, `join`, `slice`,
+  `trim`, `map`, `filter`, `append`, `contains`, `indexOf`, `at`, `length()`, …
+  Each call lowers to a `'__bp_prim_<method>'` shim that dispatches on the
+  receiver's runtime kind (`is_binary`/`is_list`/…), so any method a primitive
+  type declares works. `s.length()`, `s.len` and `xs.length` all work; `+`
+  lowers to `'__bp_add'` (binary concat or arithmetic). A method no primitive
+  and no host function answers is a located error ("the template `erika` calls
+  `.m(…)` … at line:col").
+- **`.at(i)` returns the element, or `null` past the end** — positional access
+  needs no counter loop. There is **no `@Option` in the body**: `.at(i).unwrapOr(…)`
+  is the "no primitive type provides `.unwrapOr`" error. "Optional" `where` /
+  `order` clauses are therefore 0-length-list sentinels.
+- **A two-parameter `loop` that reassigns outer `var`s** — `loop (xs) { x, i ->
+  acc = … }` lowers to `lists:foldl` over `lists:enumerate(0, Xs)` and threads
+  every reassigned variable out, with or without an explicit `, 0..` range, like
+  the one-parameter form (item 7b, fixed in `codegen/erlang.zig` in 1.0.4-beta).
+  `buildCmp` (`loop (cmpToks) { ct, idx -> }`) and the lexer
+  (`loop (chars) { ch, i -> }`) rely on it. A mutation through a method in a
+  closure (`out.push(x)` inside `forEach`) threads out too.
+
+What it may not:
+
+- **No sibling declarations.** Only the template fn is lowered, so a call to
+  another top-level fn is `undefined_function`, a top-level `val` is
+  `unbound_var`, and a named `record Token {…}` constructor is
+  `undefined_function 'Token'/1`. The lexer/parser/lowering are therefore
+  **inlined** in one fn body (helpers are local closures, `val f = { … }`, which
+  may call each other), and the private SQL "AST" is **anonymous `record { … }`**
+  values — Erlang maps, fields read with `maps:get/2`.
+
+Three language-wide parser quirks (not comptime-specific — they fail the same way in
+an ordinary fn):
+
 - **No comments inside a closure/loop body** (`{ x -> … }`) — they parse as an
   unexpected token; keep comments at fn-body level.
-- **A lambda's last statement must be an implicit-return expr** (identifier /
-  call / record / binary), **not a bare `if`** — assign the `if` to a `val` and
-  end the closure with that `val` (e.g. `cmpCode` / `operandCode`).
-
-Two language-wide parser quirks the body works around (both confirmed while
-landing erika-query-ast):
-
 - A top-level binary boolean **directly inside an `if (…)` condition fails to
-  parse** (e.g. `if (a && b)`). Extract the compound to a `val` first, then
-  `if (theVal)`.
+  parse** (e.g. `if (a && b)`: unexpected token `&&`). Extract the compound to a
+  `val` first, then `if (theVal)`.
 - **`(expr).method()` fails to parse** — a parenthesized expression followed by a
-  method call. Bind it to a `val` first (`val padded = sql + " "; padded.split("")`).
+  method call (unexpected token `.`). Bind it to a `val` first
+  (`val padded = sql + " "; padded.split("")`).
 
-One **comptime type-checker** quirk (not a parse error) also shaped the lexer:
-appending **records from three-plus branchy `toks.append([record {…}])` sites**
-mis-unifies the array element and reports `type mismatch: expected string, got
-array`. The lexer therefore emits every token through a **single** `append` site
-(the `pending` flush), classifying the kind there rather than at distinct
-per-kind sites.
+Shapes the body keeps that no longer have a constraint behind them (safe to
+simplify, not required):
+
+- `s.split("").length` for a string's length (`sqlLen`) — `s.length()` works.
+- Ending a lambda with a `val` instead of a bare `if … else …` (`cmpCode` /
+  `operandCode`) — a closure whose last statement is an `if`-expression returns
+  its value.
+- The lexer's **single** `toks.append` site (the `pending` flush) — appending
+  anonymous records from three separate branchy sites type-checks and evaluates.
+
+The erlang-codegen gotchas listed in `../botopink-lang/libs/std/AGENTS.md`
+(`+` on strings → `badarith`; `out.push(x)` inside `forEach` discarded) reproduce
+neither in the comptime body nor, in their simple forms (`a + "!"`, `out.push(x)`
+in `forEach`), in a typed erlang-target fn at `feat`; erika needs no workaround
+for them.
 
 ## Status
 
@@ -210,7 +247,7 @@ Two workflows under `.github/workflows/`:
 
 | Workflow      | Trigger                  | What                                                                |
 | ------------- | ------------------------ | ------------------------------------------------------------------- |
-| `test.yml`    | push / PR (feat/master/main) | Matrix `{ubuntu-22.04, macos-14, windows-2022} × {commonJS, erlang, beam}` (windows = commonJS-only — `escript` ships cleanly only on linux + macos). Bootstrap path: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, then `zig build install && zig build test-libs -- --lib erika --target <t>`. `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `main`). |
+| `test.yml`    | push / PR (feat/master/main) | Matrix `{ubuntu-22.04, macos-14, windows-2022} × {commonJS, erlang, beam}` (windows = commonJS-only — `escript` ships cleanly only on linux + macos). Bootstrap path: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, then `zig build install && zig build test-libs -- --lib erika --target <t>`. `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `feat`). |
 | `tag.yml`    | push to feat/master/main | Reads `version` from `botopink.json`. **feat** → moving `<version>-feat` tag (force-pushed on every push). **master/main** → immutable `<version>` tag (no-op on the same SHA; hard error if the version was not bumped). Uses the built-in `github.token`. |
 
 ## Tagging — "release is a manifest change"

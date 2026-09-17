@@ -12,8 +12,9 @@
 ////     constructor is `of` (the `Pair.of` shape) — locked across the API and the
 ////     `erika "…"` expansion.
 ////   - Methods are camelCase (`orderByDescending`, not Pascal).
-////   - There is no arity-based overloading (the JS backend mangles same-named
-////     methods), so the predicate variants are spelled out: `count`/`countWhere`,
+////   - There is no arity-based overloading (on commonJS the later of two
+////     same-named methods replaces the earlier), so the predicate variants are
+////     spelled out: `count`/`countWhere`,
 ////     `first`/`firstWhere`, `any`/`anyWhere`.
 ////   - `cast`/`ofType` are omitted: there are no runtime type tags to dispatch on.
 
@@ -345,14 +346,13 @@ pub fn repeat<T>(value: T, times: i32) -> Query<T> {
 // the whole rows. An unknown collection (or a malformed condition) aborts with
 // `q.failAt(span, …)` ranged at the offending token, not the whole template.
 //
-// Comptime-eval constraint (see AGENTS.md): only this template fn + the prelude
-// (`Span`/`CustomNode`) are emitted, so there are NO calls to sibling fns and NO
-// named-record constructors — the whole front-end is inlined here, the private
-// SQL "AST" is modelled with anonymous `record { … }` values (object literals),
-// and helpers are local closures. String length is `s.split("").length` (the
-// `.length()` method is absent); "optional" where/order are 0-length-list
-// sentinels (no `?T` Option runtime); compound booleans live in a `val` before
-// any `if (…)`.
+// Comptime-eval constraint (see AGENTS.md): the body runs in the persistent
+// Erlang comptime runtime, and only this template fn is lowered, so there are NO
+// calls to sibling fns and NO named-record constructors — the whole front-end is
+// inlined here, the private SQL "AST" is modelled with anonymous `record { … }`
+// values (Erlang maps), and helpers are local closures. "Optional" where/order
+// are 0-length-list sentinels (no `@Option` in the body); compound booleans live
+// in a `val` before any `if (…)` (a parser quirk, not a runtime one).
 pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     // ① Materialize the SQL source from the template's parts. A literal call
     // (`erika "select …"`) collapses to a single Text part; a holed call
@@ -376,9 +376,9 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
 
     // ── local helpers (lowering ③) ────────────────────────────────────────────
     // A token's text starts with `__bp_hole_` exactly when it tracks a `${…}`
-    // hole spliced via `q.parts()` (the prefix is reserved by the runtime
-    // template-eval prelude). The lexer classifies it as an `ident`; here we
-    // emit it as a bare JS expression so the post-build `substituteHoles` pass
+    // hole spliced via `q.parts()` (the prefix is reserved for template holes).
+    // The lexer classifies it as an `ident`; here we emit it as a bare
+    // expression in the generated pipeline so the post-build `substituteHoles` pass
     // swaps in the caller's expression with no further wrapping.
     val isHolePlaceholder = { txt ->
         val out = if (txt.split("").length < 10) { false; } else { txt.slice(0, 10) == "__bp_hole_"; };
@@ -401,8 +401,9 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
         out;
     };
     // A comparison group's tokens → a flat comparison record (`left [op right]`).
-    // Positional extraction is a counter loop (no `arr[i]` / Option `.at` in the
-    // eval); a dangling operator (2 tokens) is a `failAt` at the operator.
+    // Positional extraction uses the two-parameter loop's index (the loop folds
+    // `lTok`/`opTok`/`rTok` out); a dangling operator (2 tokens) is a `failAt` at
+    // the operator.
     val buildCmp = { cmpToks ->
         var lTok = blankTok;
         var opTok = blankTok;
@@ -429,9 +430,8 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     // commas, `*`, parens and `'…'` strings are their own boundaries; a token
     // closes when the next char no longer continues it, ending at that char's
     // offset (the trailing space flushes the last one). The single append site is
-    // deliberate — the comptime type-checker mis-unifies `toks` when records are
-    // appended from three-plus branchy sites (it reports "expected string, got
-    // array"), so the kind is classified here, not at distinct per-kind sites.
+    // kept from an older type-checker limit (three-plus branchy append sites no
+    // longer mis-unify); the kind is classified here, not at per-kind sites.
     var toks = [];
     var cur = "";
     var curKind = "";

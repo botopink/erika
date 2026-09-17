@@ -5,7 +5,7 @@
 # without extra config, then run `zig build test-libs -- --lib erika
 # --target <matrix.target>`.
 #
-# `BOTOPINK_LANG_REF` (repo variable, default `main`) lets the lib pin a
+# `BOTOPINK_LANG_REF` (repo variable, default `feat`) lets the lib pin a
 # specific botopink-lang SHA during a compiler-version dance.
 name: test
 
@@ -122,7 +122,7 @@ jobs:
           echo "target:  ${{ matrix.target }}"
           echo "runner:  ${{ matrix.runner }}"
           echo "fastpath: ${{ vars.BOTOPINK_USE_RELEASE_FASTPATH }}"
-          echo "ref:     ${{ vars.BOTOPINK_LANG_REF || 'main' }}"
+          echo "ref:     ${{ vars.BOTOPINK_LANG_REF || 'feat' }}"
 
       - name: zig build install (source build path)
         if: ${{ vars.BOTOPINK_USE_RELEASE_FASTPATH != 'true' }}
