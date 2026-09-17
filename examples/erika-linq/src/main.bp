@@ -18,7 +18,7 @@
 
 import erika, {of} from "erika";
 
-record Person { name: string, age: i32 }
+type Person(name: string, age: i32)
 
 val people = [
     Person(name: "Ann", age: 30),
@@ -74,7 +74,7 @@ fn loudNames() -> string {
 // resolves its builders), so it must be an immutable `val` — the template reads
 // the caller's comptime scope snapshot, which captures `val` bindings only.
 
-record City { name: string, pop: i32 }
+type City(name: string, pop: i32)
 
 val cities = [
     City(name: "Lyon",  pop: 5),
@@ -92,19 +92,20 @@ fn bigCityNames() -> string {
 }
 
 // 6) triple-quoted multi-line form — the `html """…"""` sibling. `select a, b`
-//    projects an anonymous record per row → Array<record { name, pop }>.
+//    projects a tuple per row → Array<#(name: string, pop: i32)>; a lambda reads it
+//    by destructuring (`val #(name, pop) = r`).
 fn bigCityLabels() -> string {
     val rows = erika """
         select name, pop from cities
         where pop >= 5
         order by name asc
     """;
-    return rows.map({ r -> r.name + ":" + r.pop.toString() }).join(", ");
+    return rows.map({ r -> val #(name, pop) = r; name + ":" + pop.toString() }).join(", ");
 }
 
 // ── B2 net-new: two-column `where`, arg position, two queries in one scope ──
 
-record Box { label: string, w: i32, h: i32 }
+type Box(label: string, w: i32, h: i32)
 
 val boxes = [
     Box(label: "sq",   w: 4, h: 4),   // w == h, h > 2

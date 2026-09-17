@@ -6,7 +6,7 @@
 > Spec: [`../../tasks/v0.beta.7/specs/erika.md`](../../tasks/v0.beta.7/specs/erika.md)
 
 A **C#/LINQ-style query library** for botopink — a fluent, eager, immutable
-`record Query<T>` over `Array<T>`, plus an `erika "…"` SQL-subset **template fn**
+`type Query<T>` over `Array<T>`, plus an `erika "…"` SQL-subset **template fn**
 that expands (at comptime) to the same fluent pipeline. It is **pure botopink**:
 zero compiler surface, no decorators, no host backing. erika is the proof that
 the generic `from "<lib>"` loader works for an ordinary (non-framework) external
@@ -30,7 +30,7 @@ erika/
 └── src/
     ├── root.bp        ← module-tree root: `pub default mod erika;` (public +
                          DEFAULT surface — the `import erika` handle)
-    └── erika.bp       ← the whole lib: `record Query<T>` + `Grouping<K,V>` +
+    └── erika.bp       ← the whole lib: `type Query<T>` + `Grouping<K,V>` +
                          constructors + the `pub default fn erika` template fn
                          (lexer + parser + dual lowering) + in-file tests
 ```
@@ -52,7 +52,7 @@ Both `root.bp` and `erika.bp` are listed in `botopink.json` `files` — the
 
 ## Design at a glance
 
-- **`record Query<T> { items: Array<T> }`** — every operator returns a *new*
+- **`type Query<T>(items: Array<T>)`** — every operator returns a *new*
   `Query<U>` over a freshly materialized array (eager + immutable, like `sets`).
   Terminals return scalars, `?T`, or `Array<T>`.
 - **Constructors** are top-level `pub fn` (`of`/`range`/`repeat`/`empty`). `from`
@@ -76,7 +76,7 @@ Both `root.bp` and `erika.bp` are listed in `botopink.json` `files` — the
   into unqualified fluent source
   (`of(Name).where({row -> …}).orderBy(…).select(…).toArray()`) and splices it via
   `q.build(...)`. Behaviour is **byte-for-byte the same** as the pre-refactor
-  scanner (single-field projection unwraps, multi-field → `record {…}`, `*` →
+  scanner (single-field projection unwraps, multi-field → a tuple `#(a, b)`, `*` →
   `toArray()`, `=`→`==`, `<>`→`!=`, `and`→`&&`, `'x'`→`"x"`), so runtime/codegen
   across all backends is unchanged and the in-file + `examples/erika-linq`
   tests stay green.
@@ -150,11 +150,13 @@ What it may not:
 
 - **No sibling declarations.** Only the template fn is lowered, so a call to
   another top-level fn is `undefined_function`, a top-level `val` is
-  `unbound_var`, and a named `record Token {…}` constructor is
+  `unbound_var`, and a named `type Token(…)` constructor is
   `undefined_function 'Token'/1`. The lexer/parser/lowering are therefore
   **inlined** in one fn body (helpers are local closures, `val f = { … }`, which
-  may call each other), and the private SQL "AST" is **anonymous `record { … }`**
-  values — Erlang maps, fields read with `maps:get/2`.
+  may call each other), and the private SQL "AST" is **tuples** built by local
+  closures (`mkTok`, `mkField`, `mkCmp`) and **read positionally** (`t.0`, `cmp.3`):
+  the body is evaluated untyped, where a tuple label (`t.kind`) cannot be resolved to
+  its index, so it would lower to `maps:get/2` on a tuple (`badmap`).
 
 Three language-wide parser quirks (not comptime-specific — they fail the same way in
 an ordinary fn):
@@ -190,8 +192,11 @@ for them.
 - **`selectMany` (flatMap)** — **landed.** Selector typed `fn(item: T) -> Array<U>`;
   unblocked by `fn() -> T[]` in a function-type parameter (gap **G3**, landed in `feat`).
 - **Multi-field projection** (`select a, b`) — **landed.** Two-or-more fields project
-  an anonymous structural `record { a: row.a, b: row.b }` per row; unblocked by
-  anonymous record types (gap **G2**, landed in `feat`). A single field projects
+  a tuple per row: the generated selector binds each column to a local named after it
+  (`val a = row.a; val b = row.b; #(a, b)`), so the tuple's labels are the column names
+  (gap **G2**, 1.0.3 surface). A consumer lambda reads a row by destructuring
+  (`val #(a, b) = r`): a tuple label on a lambda parameter (`r.a`) is not resolved yet
+  (botopink-lang 06 N24). A single field projects
   the bare column; `*` returns whole rows. Commas may be attached (`a, b`) or
   spaced (`a , b`) — the lexer treats each as its own token regardless.
 - **Real lexer + parser + dual lowering** (`erika-query-ast`, v0.beta.11) —

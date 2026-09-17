@@ -64,7 +64,8 @@ select <* | f1[, f2…]> from <Name> [where <cond>] [order by <field> [asc|desc]
 
 - **`select *`** → the whole rows (`Array<Row>`).
 - **`select field`** → that column (`Array<FieldType>`).
-- **`select a, b`** → an anonymous structural `record { a: …, b: … }` per row.
+- **`select a, b`** → a tuple `#(a, b)` per row, labeled by the column names; read it
+  with `val #(a, b) = row`.
   Commas may be attached (`a, b`) or spaced (`a , b`).
 - **`where <cond>`** — comparisons over a field and a literal/field
   (`== != < <= > >=`; `=` reads as `==`, `<>` as `!=`; `and`/`or`). String

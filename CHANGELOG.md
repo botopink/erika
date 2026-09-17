@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **The 1.0.3 surface** (botopink-lang front 12): `Query`/`Grouping` and the test fixtures are
+  `type`s; every `record { … }` literal is a tuple. `select a, b` projects `#(a, b)` per row
+  (the selector binds locals named after the columns, so the labels are the column names) and
+  consumers destructure rows (`val #(a, b) = r`). The SQL template's private tokens,
+  fields and comparisons are tuples read positionally (the body is evaluated untyped). commonJS
+  and erlang 31/31, `examples/erika-linq` 9/9 with its output unchanged; the sources are not
+  reformatted — `botopink format` currently drops the package handle of
+  `import erika, {of}` and the `;` after a one-statement `if` in a loop body.
 - CI: the `erlang` rows are hard cells (`allow_fail: false`) — the suite passes
   31/31 on erlang.
 

@@ -15,7 +15,7 @@ Everything is eager and immutable — each operator returns a fresh `Query`.
 ```bp
 import {erika} from "erika";
 
-record Person { name: string, age: i32 }
+type Person(name: string, age: i32)
 
 fn main() {
     val people = [
@@ -54,7 +54,7 @@ select <* | f1[, f2…]> from <Name> [where <cond>] [order by <field> [asc|desc]
 ```
 
 ```bp
-record City { name: string, pop: i32 }
+type City(name: string, pop: i32)
 val cities = [
     City(name: "Lyon",  pop: 5),
     City(name: "Paris", pop: 9),
@@ -70,9 +70,9 @@ val cities = [
 val names = erika "select name from cities where pop >= 5 order by name asc";
 // → ["Lyon", "Paris"]
 
-// `select a, b` projects an anonymous record per row → Array<record { name, pop }>
+// `select a, b` projects a tuple per row → Array<#(name: string, pop: i32)>
 val rows = erika "select name, pop from cities where pop >= 5 order by name asc";
-val labels = rows.map({ r -> r.name + ":" + r.pop.toString() });
+val labels = rows.map({ r -> val #(name, pop) = r; name + ":" + pop.toString() });
 // → ["Lyon:5", "Paris:9"]
 
 // `select *` returns whole rows → Array<City>
@@ -96,7 +96,7 @@ The **fluent** layer is an ordinary runtime call, so it queries any in-scope arr
 — `val` or `var`, records or scalars, even after a `var` is reassigned:
 
 ```bp
-record Produto { nome: string, preco: i32 }
+type Produto(nome: string, preco: i32)
 
 fn main() {
     var listas = [
@@ -119,10 +119,10 @@ fn main() {
         .select({ p -> p.nome })
         .toArray();                          // ["lapis", "caneta"]
 
-    // multi-field projection → an anonymous record per row
+    // multi-field projection → a tuple per row
     val pares = erika.of(listas)
-        .select({ p -> record { nome: p.nome, preco: p.preco } })
-        .toArray();                          // [record { nome, preco }, …]
+        .select({ p -> val nome = p.nome; val preco = p.preco; #(nome, preco) })
+        .toArray();                          // [#("caderno", 12), …]
 }
 ```
 

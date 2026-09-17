@@ -1,6 +1,6 @@
 //// erika — a C#/LINQ-style query library, pure botopink over `Array<T>`.
 ////
-//// A `record Query<T>` wraps an `Array<T>` (`items`) and exposes a fluent
+//// A `type Query<T>` wraps an `Array<T>` (`items`) and exposes a fluent
 //// operator vocabulary (`where`/`select`/`orderBy`/`groupBy`/`aggregate`/…).
 //// Eager + immutable: every operator returns a *new* `Query<U>` over a freshly
 //// materialized array (like `sets.bp`). Terminals return scalars, `?T`, or
@@ -18,9 +18,9 @@
 ////     `first`/`firstWhere`, `any`/`anyWhere`.
 ////   - `cast`/`ofType` are omitted: there are no runtime type tags to dispatch on.
 
-pub record Query<T> {
+pub type Query<T>(
     items: Array<T>,
-
+) {
     // ── materializers / size ──────────────────────────────────────────────────
     pub fn toArray(self: Self) -> Array<T> {
         return self.items;
@@ -267,10 +267,10 @@ pub record Query<T> {
 }
 
 // A keyed bucket produced by `groupBy`: the shared key plus its members.
-pub record Grouping<K, V> {
+pub type Grouping<K, V>(
     key: K,
     items: Array<V>,
-
+) {
     pub fn count(self: Self) -> i32 {
         return self.items.length;
     }
@@ -333,7 +333,7 @@ pub fn repeat<T>(value: T, times: i32) -> Query<T> {
 //   ③ lower → @Expr<T>     — walks the parse into the fluent pipeline string
 //               `of(Name).where({row -> …}).orderBy(…).select(…).toArray()` and
 //               splices it with `q.build(...)` (behaviour identical to before:
-//               single field unwraps, multi → `record {…}`, `*` → `toArray()`,
+//               single field unwraps, multi → a tuple `#(a, b)`, `*` → `toArray()`,
 //               `=`→`==`, `<>`→`!=`, `and`→`&&`, `'x'`→`"x"`).
 //   ④ lower → CustomNode   — walks the SAME tokens into the generic reference
 //               tree (label per node: keywords → `keyword`, idents → `property`,
@@ -342,15 +342,15 @@ pub fn repeat<T>(value: T, times: i32) -> Query<T> {
 //               binding) for hover/go-to-def.
 //
 // A single field projects that column (`Array<field>`); two or more project an
-// anonymous structural `record { f1: …, f2: … }` per row (gap G2). `*` returns
+// tuple `#(f1, f2)` per row, labeled by the column names (gap G2). `*` returns
 // the whole rows. An unknown collection (or a malformed condition) aborts with
 // `q.failAt(span, …)` ranged at the offending token, not the whole template.
 //
 // Comptime-eval constraint (see AGENTS.md): the body runs in the persistent
 // Erlang comptime runtime, and only this template fn is lowered, so there are NO
-// calls to sibling fns and NO named-record constructors — the whole front-end is
-// inlined here, the private SQL "AST" is modelled with anonymous `record { … }`
-// values (Erlang maps), and helpers are local closures. "Optional" where/order
+// calls to sibling fns and NO named-type constructors — the whole front-end is
+// inlined here, the private SQL "AST" is modelled with tuples (Erlang tuples,
+// read positionally), and helpers are local closures. "Optional" where/order
 // are 0-length-list sentinels (no `@Option` in the body); compound booleans live
 // in a `val` before any `if (…)` (a parser quirk, not a runtime one).
 pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
@@ -372,7 +372,15 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     // (bound to a `val` first — the comptime parser rejects `(expr).method()`).
     val padded = sql + " ";
     val chars = padded.split("");
-    val blankTok = record { kind: "", text: "", span: Span(0, 0, 1) };
+    // Tokens, projected fields and comparisons are tuples read positionally: the
+    // comptime evaluator runs this body untyped, where a label (`t.0`) cannot be
+    // resolved to its index, so the elements are addressed by position —
+    //   token      #(kind, text, span)                        → t.0 t.1 t.2
+    //   field      #(name, span)                              → f.0 f.1
+    //   comparison #(lKind, lText, opText, opSpan, rKind, rText, hasOp) → cmp.0 … cmp.6
+    val mkTok = { kind, text, span -> #(kind, text, span) };
+    val mkField = { name, span -> #(name, span) };
+    val blankTok = mkTok("", "", Span(0, 0, 1));
 
     // ── local helpers (lowering ③) ────────────────────────────────────────────
     // A token's text starts with `__bp_hole_` exactly when it tracks a `${…}`
@@ -394,13 +402,13 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
         out;
     };
     val cmpCode = { cmp ->
-        val lc = operandCode(cmp.lKind, cmp.lText);
-        val rc = operandCode(cmp.rKind, cmp.rText);
-        val oc = opCode(cmp.opText);
-        val out = if (cmp.hasOp) { lc + " " + oc + " " + rc; } else { lc; };
+        val lc = operandCode(cmp.0, cmp.1);
+        val rc = operandCode(cmp.4, cmp.5);
+        val oc = opCode(cmp.2);
+        val out = if (cmp.6) { lc + " " + oc + " " + rc; } else { lc; };
         out;
     };
-    // A comparison group's tokens → a flat comparison record (`left [op right]`).
+    // A comparison group's tokens → a flat comparison tuple (`left [op right]`).
     // Positional extraction uses the two-parameter loop's index (the loop folds
     // `lTok`/`opTok`/`rTok` out); a dangling operator (2 tokens) is a `failAt` at
     // the operator.
@@ -414,13 +422,9 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
             if (idx == 2) { rTok = ct; };
         };
         val cnt = cmpToks.length;
-        if (cnt == 2) { q.failAt(opTok.span, "erika: condition needs a value after '" + opTok.text + "'"); };
-        record {
-            lKind: lTok.kind, lText: lTok.text,
-            opText: opTok.text, opSpan: opTok.span,
-            rKind: rTok.kind, rText: rTok.text,
-            hasOp: cnt >= 3,
-        };
+        if (cnt == 2) { q.failAt(opTok.2, "erika: condition needs a value after '" + opTok.1 + "'"); };
+        val mkCmp = { lKind, lText, opText, opSpan, rKind, rText, hasOp -> #(lKind, lText, opText, opSpan, rKind, rText, hasOp) };
+        mkCmp(lTok.0, lTok.1, opTok.1, opTok.2, rTok.0, rTok.1, cnt >= 3);
     };
 
     // ── ① lexer: chars → Token[] with real spans ──────────────────────────────
@@ -463,7 +467,7 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
                 val wordFinal = if (isDigit0) { "number"; } else { if (isKwTok) { "keyword"; } else { "ident"; }; };
                 val nonWord = if (curKind == "str") { "string"; } else { curKind; };
                 val finalKind = if (isWordKind) { wordFinal; } else { nonWord; };
-                toks = toks.append([record { kind: finalKind, text: cur, span: Span(curStart, i, 1) }]);
+                toks = toks.append([mkTok(finalKind, cur, Span(curStart, i, 1))]);
             };
             cur = ch;
             curStart = i;
@@ -487,8 +491,8 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     var orderToks = [];
     var section = "head";
     loop (toks) { t ->
-        val tk = t.kind;
-        val tx = t.text;
+        val tk = t.0;
+        val tx = t.1;
         val isFrom = tk == "keyword" && tx == "from";
         val isWhere = tk == "keyword" && tx == "where";
         val isOrder = tk == "keyword" && tx == "order";
@@ -500,9 +504,9 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
         if (!isStructural) {
             if (section == "head") {
                 if (tk == "star") { star = true; };
-                if (tk == "ident") { fields = fields.append([record { name: tx, span: t.span }]); };
+                if (tk == "ident") { fields = fields.append([mkField(tx, t.2)]); };
             };
-            if (section == "afterFrom") { srcName = tx; srcSpan = t.span; section = "tail"; };
+            if (section == "afterFrom") { srcName = tx; srcSpan = t.2; section = "tail"; };
             if (section == "where") { whereToks = whereToks.append([t]); };
             if (section == "order") { orderToks = orderToks.append([t]); };
         };
@@ -516,8 +520,8 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     var curAnd = [];
     var curCmp = [];
     loop (whereToks) { t ->
-        val isAnd = t.kind == "keyword" && t.text == "and";
-        val isOr = t.kind == "keyword" && t.text == "or";
+        val isAnd = t.0 == "keyword" && t.1 == "and";
+        val isOr = t.0 == "keyword" && t.1 == "or";
         val isConn = isAnd || isOr;
         if (isAnd) {
             if (curCmp.length > 0) { curAnd = curAnd.append([buildCmp(curCmp)]); curCmp = []; };
@@ -536,12 +540,12 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     var orderSpan = Span(0, 0, 1);
     var orderDesc = false;
     loop (orderToks) { ot ->
-        val isAsc = ot.text == "asc";
-        val isDesc = ot.text == "desc";
+        val isAsc = ot.1 == "asc";
+        val isDesc = ot.1 == "desc";
         if (isDesc) { orderDesc = true; };
         val isDir = isAsc || isDesc;
         if (!isDir) {
-            if (orderName == "") { orderName = ot.text; orderSpan = ot.span; };
+            if (orderName == "") { orderName = ot.1; orderSpan = ot.2; };
         };
     };
     val hasOrder = orderToks.length > 0;
@@ -562,25 +566,26 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
         val multi = fields.length > 1;
         if (star) { pipe = pipe + ".toArray()"; };
         if (single) {
-            val proj = fields.map({ f -> "row." + f.name }).join("");
+            val proj = fields.map({ f -> "row." + f.0 }).join("");
             pipe = pipe + ".select({ row -> " + proj + " }).toArray()";
         };
         if (multi) {
-            val parts = fields.map({ f -> f.name + ": row." + f.name });
-            pipe = pipe + ".select({ row -> record { " + parts.join(", ") + " } }).toArray()";
+            val binds = fields.map({ f -> "val " + f.0 + " = row." + f.0 + "; " }).join("");
+            val names = fields.map({ f -> f.0 }).join(", ");
+            pipe = pipe + ".select({ row -> " + binds + "#(" + names + ") }).toArray()";
         };
         var nodes = [];
         loop (toks) { t ->
-            val tk = t.kind;
-            val tx = t.text;
+            val tk = t.0;
+            val tx = t.1;
             val isLogical = tk == "keyword" && (tx == "and" || tx == "or");
             val isPlainKw = tk == "keyword" && !isLogical;
             val lbl = if (isPlainKw) { "keyword"; } else { if (isLogical) { "operator"; } else { if (tk == "ident") { "property"; } else { if (tk == "string") { "string"; } else { if (tk == "number") { "number"; } else { if (tk == "op") { "operator"; } else { if (tk == "star") { "operator"; } else { "none"; }; }; }; }; }; }; };
             val skip = tk == "comma" || tk == "paren";
-            val isSrc = t.span.start == srcSpan.start && t.span.end == srcSpan.end;
-            if (isSrc) { nodes = nodes.append([CustomNode(kind: tk, span: t.span, label: lbl, ref: binding, children: [])]); };
+            val isSrc = t.2.start == srcSpan.start && t.2.end == srcSpan.end;
+            if (isSrc) { nodes = nodes.append([CustomNode(kind: tk, span: t.2, label: lbl, ref: binding, children: [])]); };
             val plain = !skip && !isSrc;
-            if (plain) { nodes = nodes.append([CustomNode(kind: tk, span: t.span, label: lbl, ref: null, children: [])]); };
+            if (plain) { nodes = nodes.append([CustomNode(kind: tk, span: t.2, label: lbl, ref: null, children: [])]); };
         };
         val root = CustomNode(kind: "query", span: Span(0, sqlLen, 1), label: "none", ref: null, children: nodes);
         return q.custom(root, q.build(pipe));
@@ -703,10 +708,10 @@ test "erika any/anyWhere/all/contains quantifiers" {
 // The query string resolves its collection against this module's top-level
 // scope snapshot, so the fixture below is a top-level `val`.
 
-record ErikaCity {
+type ErikaCity(
     name: string,
     pop: i32,
-}
+)
 
 val erikaCities = [
     ErikaCity(name: "Lyon", pop: 5),
@@ -734,9 +739,9 @@ test "erika query: where with a string literal" {
     assert one.join(",") == "9";
 }
 
-test "erika query: multi-field select projects an anonymous record" {
+test "erika query: multi-field select projects a tuple per row" {
     val rows = erika "select name, pop from erikaCities where pop >= 5 order by name asc";
-    val labels = rows.map({ r -> r.name + ":" + r.pop.toString() });
+    val labels = rows.map({ r -> val #(name, pop) = r; name + ":" + pop.toString() });
     assert labels.join(",") == "Lyon:5,Paris:9";
 }
 
@@ -798,10 +803,10 @@ test "erika query: ${} interp inlines a runtime value on both sides" {
 // *comptime* scope snapshot, which only captures immutable `val` bindings, so the
 // SQL form needs a `val` collection — see AGENTS.md.)
 
-record ErikaProduct {
+type ErikaProduct(
     nome: string,
     preco: i32,
-}
+)
 
 test "erika select over a var listas of records" {
     var listas = [
@@ -834,8 +839,8 @@ test "erika multi-field select over a var listas" {
         ErikaProduct(nome: "caderno", preco: 12),
         ErikaProduct(nome: "caneta", preco: 3),
     ];
-    // project two columns into an anonymous record per row (the same shape the
+    // project two columns into a tuple per row (the same shape the
     // `erika "select nome, preco …"` SQL form expands to)
-    val pares = of(listas).select({ p -> record { nome: p.nome, preco: p.preco } }).toArray();
-    assert pares.map({ x -> x.nome + ":" + x.preco.toString() }).join(",") == "caderno:12,caneta:3";
+    val pares = of(listas).select({ p -> val nome = p.nome; val preco = p.preco; #(nome, preco) }).toArray();
+    assert pares.map({ x -> val #(nome, preco) = x; nome + ":" + preco.toString() }).join(",") == "caderno:12,caneta:3";
 }
