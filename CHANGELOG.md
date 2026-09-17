@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The examples gate no longer aborts silently on a `scripts/known-broken-examples.txt`
+  holding only comments or blank lines: the runner reads the list with `awk`, whose
+  "no entry" is not a failure under `set -euo pipefail`.
+
 - **MIT license.** `LICENSE` (`Copyright (c) 2026 Eric Fillipe and botopink
   contributors`) backs the README's License section, which now points at it.
 

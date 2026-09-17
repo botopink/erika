@@ -99,7 +99,10 @@ runExamplesGate() {
     local list="$root/scripts/known-broken-examples.txt"
     local known=""
     if [ -f "$list" ]; then
-        known=$(grep -vE '^[[:space:]]*(#|$)' "$list" | awk '{print $1}')
+        # awk, not `grep -v | awk`: a list of only comments or blank lines has
+        # no entry, and grep's "no match" exit 1 would abort under pipefail.
+        # An unreadable list still fails (awk exits non-zero).
+        known=$(awk '!/^[[:space:]]*(#|$)/ {print $1}' "$list")
     fi
     local k
     for k in $known; do
