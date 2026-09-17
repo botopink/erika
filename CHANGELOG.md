@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- CI: the `erlang` rows are hard cells (`allow_fail: false`) — the suite passes
+  31/31 on erlang.
+
 - The examples gate no longer aborts silently on a `scripts/known-broken-examples.txt`
   holding only comments or blank lines: the runner reads the list with `awk`, whose
   "no entry" is not a failure under `set -euo pipefail`.

@@ -29,19 +29,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `allow_fail: true` on the `erlang` axis tracks the four sibling-
-        # lib codegen-completion reds deferred to v0.beta.21 (audit in
-        # `tasks/v0.beta.20/specs/sibling-lib-erlang-codegen-reds.md`
-        # — interface-method dispatch + extension-fn fan-out on the erlang
-        # backend). windows-2022 commonJS now runs the source step under
+        # The `erlang` axis is a hard cell: `botopink test --target erlang`
+        # passes the whole suite (31/31, measured 2026-09-17), so the old
+        # `allow_fail: true` (the v0.beta.20 sibling-lib erlang codegen reds)
+        # is gone. windows-2022 commonJS now runs the source step under
         # `shell: bash` (ci-tail W1), closing the PowerShell `${LIB_NAME}`
         # expansion gap; the row carries `allow_fail: false`.
         include:
           - { runner: ubuntu-22.04, target: commonJS, allow_fail: false }
-          - { runner: ubuntu-22.04, target: erlang,   allow_fail: true  }
+          - { runner: ubuntu-22.04, target: erlang,   allow_fail: false }
           - { runner: ubuntu-22.04, target: beam,     allow_fail: false }
           - { runner: macos-14,     target: commonJS, allow_fail: false }
-          - { runner: macos-14,     target: erlang,   allow_fail: true  }
+          - { runner: macos-14,     target: erlang,   allow_fail: false }
           - { runner: macos-14,     target: beam,     allow_fail: false }
           - { runner: windows-2022, target: commonJS, allow_fail: false }
     runs-on: ${{ matrix.runner }}

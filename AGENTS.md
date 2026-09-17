@@ -247,7 +247,7 @@ Two workflows under `.github/workflows/`:
 
 | Workflow      | Trigger                  | What                                                                |
 | ------------- | ------------------------ | ------------------------------------------------------------------- |
-| `test.yml`    | push / PR (feat/master/main) | Matrix `{ubuntu-22.04, macos-14, windows-2022} × {commonJS, erlang, beam}` (windows = commonJS-only — `escript` ships cleanly only on linux + macos). Bootstrap path: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, then `zig build install && zig build test-libs -- --lib erika --target <t>`. `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `feat`). |
+| `test.yml`    | push / PR (feat/master/main) | Matrix `{ubuntu-22.04, macos-14, windows-2022} × {commonJS, erlang, beam}` (windows = commonJS-only — `escript` ships cleanly only on linux + macos). Bootstrap path: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, then `zig build install && zig build test-libs -- --lib erika --target <t>`. The `erlang` rows are hard cells (no `allow_fail`; 31/31 on erlang). `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `feat`). |
 | `tag.yml`    | push to feat/master/main | Reads `version` from `botopink.json`. **feat** → moving `<version>-feat` tag (force-pushed on every push). **master/main** → immutable `<version>` tag (no-op on the same SHA; hard error if the version was not bumped). Uses the built-in `github.token`. |
 
 ## Tagging — "release is a manifest change"
