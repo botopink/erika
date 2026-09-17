@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# runner-standalone.sh — pre-commit gate for a standalone clone of this .bp lib.
+# runner-standalone.sh — the pre-commit gate of a botopink library.
 #
-# Self-contained mirror of botopink/projects'
-# scripts/git-hooks/lib/runners/bp-lib.sh — it has to run without the meta
-# workspace nearby (lib's own CI, partial checkout, bpmp packing).
+# Sourced by scripts/git-hooks/pre-commit. It is the only runner: it needs
+# nothing outside this repository (standalone clone, meta checkout, worktree,
+# bpmp packing). Stages: conflict markers in staged files, then `botopink test`.
 set -euo pipefail
 
 RED='\033[0;31m'

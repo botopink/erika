@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The pre-commit hook is self-contained: the dead delegation to a meta
+  workspace runner is gone, and `AGENTS.md` documents the install
+  (`git config core.hooksPath scripts/git-hooks`) instead of a
+  `scripts/install-hooks.sh` that exists in no repository.
 - Promoted from workspace subdir to standalone repository under
   `botopink/erika`. Tracked from `botopink/projects` as a git submodule on the
   `feat` branch.
