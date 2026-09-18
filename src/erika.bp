@@ -52,7 +52,9 @@ pub type Query<T>(
     // in a function-type parameter (v0.beta.6 gap G3, landed in `feat`).
     pub fn selectMany<U>(self: Self, selector: fn(item: T) -> Array<U>) -> Query<U> {
         var out: Array<U> = [];
-        self.items.forEach({ x -> out = out.append(selector(x)); });
+        self.items.forEach({ x ->
+                out = out.append(selector(x));
+            });
         return Query(items: out);
     }
 
@@ -69,10 +71,8 @@ pub type Query<T>(
         var out: Array<T> = [];
         var taking = true;
         self.items.forEach({ x ->
-            if (taking) {
-                if (pred(x)) { out = out.append([x]); } else { taking = false; };
-            };
-        });
+                if (taking) if (pred(x)) out = out.append([x]) else taking = false;
+            });
         return Query(items: out);
     }
 
@@ -80,13 +80,14 @@ pub type Query<T>(
         var out: Array<T> = [];
         var skipping = true;
         self.items.forEach({ x ->
-            if (skipping) {
-                val stop = !pred(x);
-                if (stop) { skipping = false; out = out.append([x]); };
-            } else {
-                out = out.append([x]);
-            };
-        });
+                if (skipping) {
+                    val stop = !pred(x);
+                    if (stop) {
+                        skipping = false;
+                        out = out.append([x]);
+                    };
+                } else out = out.append([x]);
+            });
         return Query(items: out);
     }
 
@@ -98,22 +99,22 @@ pub type Query<T>(
     pub fn orderBy<K>(self: Self, keyFn: fn(item: T) -> K) -> Query<T> {
         var sorted: Array<T> = [];
         self.items.forEach({ x ->
-            val kx = keyFn(x);
-            val before = sorted.filter({ y -> !(kx < keyFn(y)) });
-            val after = sorted.filter({ y -> kx < keyFn(y) });
-            sorted = before.append([x]).append(after);
-        });
+                val kx = keyFn(x);
+                val before = sorted.filter({ y -> !(kx < keyFn(y)) });
+                val after = sorted.filter({ y -> kx < keyFn(y) });
+                sorted = before.append([x]).append(after);
+            });
         return Query(items: sorted);
     }
 
     pub fn orderByDescending<K>(self: Self, keyFn: fn(item: T) -> K) -> Query<T> {
         var sorted: Array<T> = [];
         self.items.forEach({ x ->
-            val kx = keyFn(x);
-            val before = sorted.filter({ y -> !(keyFn(y) < kx) });
-            val after = sorted.filter({ y -> keyFn(y) < kx });
-            sorted = before.append([x]).append(after);
-        });
+                val kx = keyFn(x);
+                val before = sorted.filter({ y -> !(keyFn(y) < kx) });
+                val after = sorted.filter({ y -> keyFn(y) < kx });
+                sorted = before.append([x]).append(after);
+            });
         return Query(items: sorted);
     }
 
@@ -121,9 +122,9 @@ pub type Query<T>(
     pub fn distinct(self: Self) -> Query<T> {
         var out: Array<T> = [];
         self.items.forEach({ x ->
-            val fresh = out.indexOf(x) == -1;
-            if (fresh) { out = out.append([x]); };
-        });
+                val fresh = out.indexOf(x) == -1;
+                if (fresh) out = out.append([x]);
+            });
         return Query(items: out);
     }
 
@@ -131,10 +132,13 @@ pub type Query<T>(
         var out: Array<T> = [];
         var keys: Array<K> = [];
         self.items.forEach({ x ->
-            val k = keyFn(x);
-            val fresh = keys.indexOf(k) == -1;
-            if (fresh) { keys = keys.append([k]); out = out.append([x]); };
-        });
+                val k = keyFn(x);
+                val fresh = keys.indexOf(k) == -1;
+                if (fresh) {
+                    keys = keys.append([k]);
+                    out = out.append([x]);
+                };
+            });
         return Query(items: out);
     }
 
@@ -159,29 +163,32 @@ pub type Query<T>(
     pub fn groupBy<K>(self: Self, keyFn: fn(item: T) -> K) -> Query<Grouping<K, T>> {
         var keys: Array<K> = [];
         self.items.forEach({ x ->
-            val k = keyFn(x);
-            val fresh = keys.indexOf(k) == -1;
-            if (fresh) { keys = keys.append([k]); };
-        });
+                val k = keyFn(x);
+                val fresh = keys.indexOf(k) == -1;
+                if (fresh) keys = keys.append([k]);
+            });
         var groups: Array<Grouping<K, T>> = [];
         keys.forEach({ k ->
-            val members = self.items.filter({ x -> keyFn(x) == k });
-            groups = groups.append([Grouping(key: k, items: members)]);
-        });
+                val members = self.items.filter({ x -> keyFn(x) == k });
+                groups = groups.append([Grouping(key: k, items: members)]);
+            });
         return Query(items: groups);
     }
 
     // Pairs each element with the element at the same index in `other`, stopping
     // at the shorter length, and combines them with `combine`.
     pub fn zip<U, R>(self: Self, other: Query<U>, combine: fn(a: T, b: U) -> R) -> Query<R> {
-        val n = if (self.items.length < other.items.length) { self.items.length; } else { other.items.length; };
+        val n = if (self.items.length < other.items.length) self.items.length else other.items.length;
         var out: Array<R> = [];
         var i = 0;
         self.items.take(n).forEach({ a ->
-            val mb = other.items.at(i);
-            if (mb) { b -> out = out.append([combine(a, b)]); };
-            i = i + 1;
-        });
+                val mb = other.items.at(i);
+                if (mb) {
+                    b ->
+                    out = out.append([combine(a, b)]);
+                };
+                i = i + 1;
+            });
         return Query(items: out);
     }
 
@@ -197,8 +204,11 @@ pub type Query<T>(
     pub fn average(self: Self, selector: fn(item: T) -> f64) -> f64 {
         var total = 0.0;
         var n = 0.0;
-        self.items.forEach({ x -> total = total + selector(x); n = n + 1.0; });
-        if (n == 0.0) { return 0.0; };
+        self.items.forEach({ x ->
+                total = total + selector(x);
+                n = n + 1.0;
+            });
+        if (n == 0.0) return 0.0;
         return total / n;
     }
 
@@ -206,10 +216,11 @@ pub type Query<T>(
         val keys = self.items.map(keyFn);
         var best = keys.at(0);
         keys.forEach({ k ->
-            if (best) { b ->
-                if (k < b) { best = k; };
-            };
-        });
+                if (best) {
+                    b ->
+                    if (k < b) best = k;
+                };
+            });
         return best;
     }
 
@@ -217,10 +228,11 @@ pub type Query<T>(
         val keys = self.items.map(keyFn);
         var best = keys.at(0);
         keys.forEach({ k ->
-            if (best) { b ->
-                if (b < k) { best = k; };
-            };
-        });
+                if (best) {
+                    b ->
+                    if (b < k) best = k;
+                };
+            });
         return best;
     }
 
@@ -241,7 +253,7 @@ pub type Query<T>(
     }
 
     pub fn single(self: Self) -> ?T {
-        if (self.items.length == 1) { return self.items.at(0); };
+        if (self.items.length == 1) return self.items.at(0);
         return self.items.at(self.items.length); // absent unless exactly one
     }
 
@@ -291,7 +303,7 @@ pub fn empty<T>() -> Query<T> {
 }
 
 fn rangeInto(acc: Array<i32>, i: i32, stop: i32) -> Array<i32> {
-    if (i >= stop) { return acc; };
+    if (i >= stop) return acc;
     return rangeInto(acc.append([i]), i + 1, stop);
 }
 
@@ -300,14 +312,13 @@ pub fn range(start: i32, stop: i32) -> Query<i32> {
 }
 
 fn repeatInto<T>(acc: Array<T>, value: T, n: i32) -> Array<T> {
-    if (n <= 0) { return acc; };
+    if (n <= 0) return acc;
     return repeatInto(acc.append([value]), value, n - 1);
 }
 
 pub fn repeat<T>(value: T, times: i32) -> Query<T> {
     return Query(items: repeatInto([], value, times));
 }
-
 
 // ── F5: the `erika "…"` query-string template fn ──────────────────────────────
 //
@@ -364,8 +375,8 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     // `infer.substituteHoles` swaps in the caller's expression after build().
     var sql = "";
     loop (q.parts()) { p ->
-        if (p.kind == "Text") { sql = sql + p.text; };
-        if (p.kind == "Interp") { sql = sql + p.code; };
+        if (p.kind == "Text") sql = sql + p.text;
+        if (p.kind == "Interp") sql = sql + p.code;
     };
     val sqlLen = sql.split("").length;
     // Trailing space forces the final token to flush at the end of the scan
@@ -389,23 +400,25 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     // expression in the generated pipeline so the post-build `substituteHoles` pass
     // swaps in the caller's expression with no further wrapping.
     val isHolePlaceholder = { txt ->
-        val out = if (txt.split("").length < 10) { false; } else { txt.slice(0, 10) == "__bp_hole_"; };
+        val out = if (txt.split("").length < 10) false else txt.slice(0, 10) == "__bp_hole_";
         out;
     };
     val operandCode = { knd, txt ->
         val isHole = isHolePlaceholder(txt);
-        val out = if (isHole) { txt; } else { if (knd == "string") { "\"" + txt.split("'").join("") + "\""; } else { if (knd == "number") { txt; } else { "row." + txt; }; }; };
+        val out = if (isHole) txt else if (knd == "string") "\"" + txt.split("'").join(
+            ""
+        ) + "\"" else if (knd == "number") txt else "row." + txt;
         out;
     };
     val opCode = { opText ->
-        val out = if (opText == "=") { "=="; } else { if (opText == "<>") { "!="; } else { opText; }; };
+        val out = if (opText == "=") "==" else if (opText == "<>") "!=" else opText;
         out;
     };
     val cmpCode = { cmp ->
         val lc = operandCode(cmp.0, cmp.1);
         val rc = operandCode(cmp.4, cmp.5);
         val oc = opCode(cmp.2);
-        val out = if (cmp.6) { lc + " " + oc + " " + rc; } else { lc; };
+        val out = if (cmp.6) lc + " " + oc + " " + rc else lc;
         out;
     };
     // A comparison group's tokens → a flat comparison tuple (`left [op right]`).
@@ -417,12 +430,12 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
         var opTok = blankTok;
         var rTok = blankTok;
         loop (cmpToks) { ct, idx ->
-            if (idx == 0) { lTok = ct; };
-            if (idx == 1) { opTok = ct; };
-            if (idx == 2) { rTok = ct; };
+            if (idx == 0) lTok = ct;
+            if (idx == 1) opTok = ct;
+            if (idx == 2) rTok = ct;
         };
         val cnt = cmpToks.length;
-        if (cnt == 2) { q.failAt(opTok.2, "erika: condition needs a value after '" + opTok.1 + "'"); };
+        if (cnt == 2) q.failAt(opTok.2, "erika: condition needs a value after '" + opTok.1 + "'");
         val mkCmp = { lKind, lText, opText, opSpan, rKind, rText, hasOp -> #(lKind, lText, opText, opSpan, rKind, rText, hasOp) };
         mkCmp(lTok.0, lTok.1, opTok.1, opTok.2, rTok.0, rTok.1, cnt >= 3);
     };
@@ -455,7 +468,7 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
         val cont = contWord || contOp || contStr;
         if (cont) {
             cur = cur + ch;
-            if (isQuote) { strClosed = true; };
+            if (isQuote) strClosed = true;
         };
         if (!cont) {
             val pending = curKind != "";
@@ -464,21 +477,24 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
                 val isDigit0 = c0 == "0" || c0 == "1" || c0 == "2" || c0 == "3" || c0 == "4" || c0 == "5" || c0 == "6" || c0 == "7" || c0 == "8" || c0 == "9";
                 val isKwTok = cur == "select" || cur == "from" || cur == "where" || cur == "order" || cur == "by" || cur == "asc" || cur == "desc" || cur == "and" || cur == "or";
                 val isWordKind = curKind == "word";
-                val wordFinal = if (isDigit0) { "number"; } else { if (isKwTok) { "keyword"; } else { "ident"; }; };
-                val nonWord = if (curKind == "str") { "string"; } else { curKind; };
-                val finalKind = if (isWordKind) { wordFinal; } else { nonWord; };
+                val wordFinal = if (isDigit0) "number" else if (isKwTok) "keyword" else "ident";
+                val nonWord = if (curKind == "str") "string" else curKind;
+                val finalKind = if (isWordKind) wordFinal else nonWord;
                 toks = toks.append([mkTok(finalKind, cur, Span(curStart, i, 1))]);
             };
             cur = ch;
             curStart = i;
             strClosed = false;
-            if (isWordCh) { curKind = "word"; };
-            if (isOpCh) { curKind = "op"; };
-            if (isQuote) { curKind = "str"; };
-            if (isComma) { curKind = "comma"; };
-            if (isStar) { curKind = "star"; };
-            if (isParen) { curKind = "paren"; };
-            if (isWs) { curKind = ""; cur = ""; };
+            if (isWordCh) curKind = "word";
+            if (isOpCh) curKind = "op";
+            if (isQuote) curKind = "str";
+            if (isComma) curKind = "comma";
+            if (isStar) curKind = "star";
+            if (isParen) curKind = "paren";
+            if (isWs) {
+                curKind = "";
+                cur = "";
+            };
         };
     };
 
@@ -498,17 +514,21 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
         val isOrder = tk == "keyword" && tx == "order";
         val isBy = tk == "keyword" && tx == "by";
         val isStructural = isFrom || isWhere || isOrder || isBy;
-        if (isFrom) { section = "afterFrom"; };
-        if (isWhere) { section = "where"; };
-        if (isOrder) { section = "order"; };
+        if (isFrom) section = "afterFrom";
+        if (isWhere) section = "where";
+        if (isOrder) section = "order";
         if (!isStructural) {
             if (section == "head") {
-                if (tk == "star") { star = true; };
-                if (tk == "ident") { fields = fields.append([mkField(tx, t.2)]); };
+                if (tk == "star") star = true;
+                if (tk == "ident") fields = fields.append([mkField(tx, t.2)]);
             };
-            if (section == "afterFrom") { srcName = tx; srcSpan = t.2; section = "tail"; };
-            if (section == "where") { whereToks = whereToks.append([t]); };
-            if (section == "order") { orderToks = orderToks.append([t]); };
+            if (section == "afterFrom") {
+                srcName = tx;
+                srcSpan = t.2;
+                section = "tail";
+            };
+            if (section == "where") whereToks = whereToks.append([t]);
+            if (section == "order") orderToks = orderToks.append([t]);
         };
     };
 
@@ -523,18 +543,22 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
         val isAnd = t.0 == "keyword" && t.1 == "and";
         val isOr = t.0 == "keyword" && t.1 == "or";
         val isConn = isAnd || isOr;
-        if (isAnd) {
-            if (curCmp.length > 0) { curAnd = curAnd.append([buildCmp(curCmp)]); curCmp = []; };
+        if (isAnd) if (curCmp.length > 0) {
+            curAnd = curAnd.append([buildCmp(curCmp)]);
+            curCmp = [];
         };
         if (isOr) {
-            if (curCmp.length > 0) { curAnd = curAnd.append([buildCmp(curCmp)]); curCmp = []; };
+            if (curCmp.length > 0) {
+                curAnd = curAnd.append([buildCmp(curCmp)]);
+                curCmp = [];
+            };
             orGroups = orGroups.append([curAnd]);
             curAnd = [];
         };
-        if (!isConn) { curCmp = curCmp.append([t]); };
+        if (!isConn) curCmp = curCmp.append([t]);
     };
-    if (curCmp.length > 0) { curAnd = curAnd.append([buildCmp(curCmp)]); };
-    if (hasWhere) { orGroups = orGroups.append([curAnd]); };
+    if (curCmp.length > 0) curAnd = curAnd.append([buildCmp(curCmp)]);
+    if (hasWhere) orGroups = orGroups.append([curAnd]);
 
     var orderName = "";
     var orderSpan = Span(0, 0, 1);
@@ -542,35 +566,39 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     loop (orderToks) { ot ->
         val isAsc = ot.1 == "asc";
         val isDesc = ot.1 == "desc";
-        if (isDesc) { orderDesc = true; };
+        if (isDesc) orderDesc = true;
         val isDir = isAsc || isDesc;
-        if (!isDir) {
-            if (orderName == "") { orderName = ot.1; orderSpan = ot.2; };
+        if (!isDir) if (orderName == "") {
+            orderName = ot.1;
+            orderSpan = ot.2;
         };
     };
     val hasOrder = orderToks.length > 0;
 
     // ── resolve the source + dual lowering (③ code, ④ reference tree) ─────────
     val known = q.lookup(srcName);
-    if (known) { binding ->
+    if (known) {
+        binding ->
         var pipe = "of(" + srcName + ")";
         if (hasWhere) {
             val orParts = orGroups.map({ andGroup -> andGroup.map({ cmp -> cmpCode(cmp) }).join(" && ") });
             pipe = pipe + ".where({ row -> " + orParts.join(" || ") + " })";
         };
         if (hasOrder) {
-            val opName = if (orderDesc) { "orderByDescending"; } else { "orderBy"; };
+            val opName = if (orderDesc) "orderByDescending" else "orderBy";
             pipe = pipe + "." + opName + "({ row -> row." + orderName + " })";
         };
         val single = fields.length == 1;
         val multi = fields.length > 1;
-        if (star) { pipe = pipe + ".toArray()"; };
+        if (star) pipe = pipe + ".toArray()";
         if (single) {
             val proj = fields.map({ f -> "row." + f.0 }).join("");
             pipe = pipe + ".select({ row -> " + proj + " }).toArray()";
         };
         if (multi) {
-            val binds = fields.map({ f -> "val " + f.0 + " = row." + f.0 + "; " }).join("");
+            val binds = fields.map({ f -> "val " + f.0 + " = row." + f.0 + "; " }).join(
+                ""
+            );
             val names = fields.map({ f -> f.0 }).join(", ");
             pipe = pipe + ".select({ row -> " + binds + "#(" + names + ") }).toArray()";
         };
@@ -580,12 +608,12 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
             val tx = t.1;
             val isLogical = tk == "keyword" && (tx == "and" || tx == "or");
             val isPlainKw = tk == "keyword" && !isLogical;
-            val lbl = if (isPlainKw) { "keyword"; } else { if (isLogical) { "operator"; } else { if (tk == "ident") { "property"; } else { if (tk == "string") { "string"; } else { if (tk == "number") { "number"; } else { if (tk == "op") { "operator"; } else { if (tk == "star") { "operator"; } else { "none"; }; }; }; }; }; }; };
+            val lbl = if (isPlainKw) "keyword" else if (isLogical) "operator" else if (tk == "ident") "property" else if (tk == "string") "string" else if (tk == "number") "number" else if (tk == "op") "operator" else if (tk == "star") "operator" else "none";
             val skip = tk == "comma" || tk == "paren";
             val isSrc = t.2.start == srcSpan.start && t.2.end == srcSpan.end;
-            if (isSrc) { nodes = nodes.append([CustomNode(kind: tk, span: t.2, label: lbl, ref: binding, children: [])]); };
+            if (isSrc) nodes = nodes.append([CustomNode(kind: tk, span: t.2, label: lbl, ref: binding, children: [])]);
             val plain = !skip && !isSrc;
-            if (plain) { nodes = nodes.append([CustomNode(kind: tk, span: t.2, label: lbl, ref: null, children: [])]); };
+            if (plain) nodes = nodes.append([CustomNode(kind: tk, span: t.2, label: lbl, ref: null, children: [])]);
         };
         val root = CustomNode(kind: "query", span: Span(0, sqlLen, 1), label: "none", ref: null, children: nodes);
         return q.custom(root, q.build(pipe));
@@ -594,7 +622,6 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     // string (sublanguage-lsp F2), not at the whole template.
     return q.failAt(srcSpan, "erika: unknown collection '" + srcName + "' in scope");
 }
-
 
 // ── tests: fluent layer ─────────────────────────────────────────────────────
 
@@ -606,10 +633,7 @@ test "erika of/range/repeat/empty construct" {
 }
 
 test "erika where/select pipeline materializes" {
-    val out = of([1, 2, 3, 4, 5])
-        .where({ n -> n % 2 == 0 })
-        .select({ n -> n * 10 })
-        .toArray();
+    val out = of([1, 2, 3, 4, 5]).where({ n -> n % 2 == 0 }).select({ n -> n * 10 }).toArray();
     assert out.join(",") == "20,40";
 }
 
@@ -741,7 +765,10 @@ test "erika query: where with a string literal" {
 
 test "erika query: multi-field select projects a tuple per row" {
     val rows = erika "select name, pop from erikaCities where pop >= 5 order by name asc";
-    val labels = rows.map({ r -> val #(name, pop) = r; name + ":" + pop.toString() });
+    val labels = rows.map({ r ->
+            val #(name, pop) = r;
+            name + ":" + pop.toString();
+        });
     assert labels.join(",") == "Lyon:5,Paris:9";
 }
 
@@ -795,7 +822,6 @@ test "erika query: ${} interp inlines a runtime value on both sides" {
     assert mid.join(",") == "Lyon,Paris";
 }
 
-
 // ── tests: select over `var listas = [..]` ───────────────────────────────────
 // The fluent layer is an ordinary runtime call, so it queries ANY in-scope array
 // — `val` or `var`, records or scalars, even after the `var` is reassigned. (The
@@ -820,11 +846,9 @@ test "erika select over a var listas of records" {
 
     // a `var` can be reassigned and re-queried
     listas = listas.append([ErikaProduct(nome: "lapis", preco: 2)]);
-    val baratos = of(listas)
-        .where({ p -> p.preco < 12 })
-        .orderBy({ p -> p.preco })
-        .select({ p -> p.nome })
-        .toArray();
+    val baratos = of(listas).where({ p -> p.preco < 12 }).orderBy({ p -> p.preco }).select(
+        { p -> p.nome }
+    ).toArray();
     assert baratos.join(",") == "lapis,caneta";
 }
 
@@ -841,6 +865,13 @@ test "erika multi-field select over a var listas" {
     ];
     // project two columns into a tuple per row (the same shape the
     // `erika "select nome, preco …"` SQL form expands to)
-    val pares = of(listas).select({ p -> val nome = p.nome; val preco = p.preco; #(nome, preco) }).toArray();
-    assert pares.map({ x -> val #(nome, preco) = x; nome + ":" + preco.toString() }).join(",") == "caderno:12,caneta:3";
+    val pares = of(listas).select({ p ->
+            val nome = p.nome;
+            val preco = p.preco;
+            #(nome, preco);
+        }).toArray();
+    assert pares.map({ x ->
+            val #(nome, preco) = x;
+            nome + ":" + preco.toString();
+        }).join(",") == "caderno:12,caneta:3";
 }
