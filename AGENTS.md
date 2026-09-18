@@ -103,6 +103,14 @@ Both `root.bp` and `erika.bp` are listed in `botopink.json` `files` — the
   `botopink test` from this directory — not in the compiler's Zig suites. The
   cross-module consumer story lives in [`./examples/erika-linq/`](examples/erika-linq/)
   (`botopink test` green there too).
+- **Every empty array literal is born with its element type** — `var out:
+  Array<T> = [];`, never `var out = [];`. botopink-lang decision 8 §1.4 decides
+  a type argument only where the value is born, so the bare form declares
+  `unknown[]`: a warning today and an error once front 06's checker lands.
+  Inside the `erika "…"` template body the element type is the tuple the body
+  documents at `src/erika.bp:375` — a token is `#(string, string, Span)`, a
+  projected field `#(string, Span)`, a comparison the seven-element tuple
+  `buildCmp` answers.
 - Keep this file, `docs.md`, `examples.md`, and the spec in sync in the same
   change that touches the lib.
 
