@@ -2,26 +2,30 @@
 
 ## Unreleased
 
-- **The 8 red erlang cells of `examples/erika-linq` are diagnosed and handed back**
-  (botopink-lang `00 · 02-erlang`). Measured 2026-09-21 against botopink-lang feat
-  `c1c0f71c`: `botopink test --target erlang` in the example is 1 passed / 8 failed,
-  every one `{error, badarg}` — not `{error, undef}`, as the packaging note below
-  recorded before anyone read the stack. The real frame is
+- **The 8 red erlang cells of `examples/erika-linq` are fixed** — in botopink-lang
+  `2e6bb4ac` (`00 · 02-erlang`), not here: nothing in `modules/erika` or
+  `examples/erika-linq` was edited for them. Diagnosed 2026-09-21 against botopink-lang
+  feat `c1c0f71c` and re-measured the same day against `2e6bb4ac`: `botopink test
+  --target erlang` in the example goes from 1 passed / 8 failed — every one
+  `{error, badarg}`, not `{error, undef}` as the packaging note below recorded before
+  anyone read the stack — to **9 passed, 0 failed**. The frame was
   `erlang:element(3, {erika@erika__t__query, […]})` inside
   `erika@erika__t__grouping:toArray/1`: a method name declared by TWO records of an
-  imported module (`Query.toArray` and `Grouping.toArray`) is resolved by the NAME
-  alone, so the call enters the wrong record's module and reads its field offset off
-  the right record's tuple. The backend already counts dissent for a local collision
-  and, since `fcc0244b`, for a field collision — this is the same defect on the
-  imported-method axis. Two measurements pin it: removing the name collision gives
-  9/9, and dispatching on the receiver's own tag
-  (`apply(element(1, V), toArray, [V])`) gives 9/9. **Neither is committed** — a
-  library workaround for a compiler defect is not a fix. New
-  [`repro/erlang-imported-method-name/`](repro/erlang-imported-method-name/) hands it
-  back: a self-contained package with no erika in it, carrying the local collision as
-  a green control beside the imported one. `modules/erika` stays 31/31 on both
-  targets; `examples/erika-linq` stays 9/9 on commonJS and its `targets` array is
-  unchanged.
+  imported module (`Query.toArray` and `Grouping.toArray`) was resolved by the NAME
+  alone, so the call entered the wrong record's module and read its field offset off the
+  right record's tuple. The backend already counted dissent for a local collision and,
+  since `fcc0244b`, for a field collision; the imported-method axis now counts its owner
+  over the program by `name/arity` too, and one dissenting declaration sends the call
+  through `'__bp_method'/3` — the twin of `'__bp_field'/2`, which asks the value's own
+  tag. The two measurements that pinned the diagnosis (removing the name collision;
+  dispatching on the receiver's own tag in a hand-patched `main.erl`) were never
+  committed — a library workaround for a compiler defect is not a fix. The reproduction
+  handed back with it (`repro/erlang-imported-method-name/`) is deleted with the fix, as
+  its README promised, and the case is covered in the compiler's own tree by
+  `tests/language/modules/method_name_collision`. `modules/erika` stays 31/31 on both
+  targets; `examples/erika-linq` is 9/0 on commonJS and on erlang, and its `targets`
+  array is unchanged — the ledger line in `scripts/restricted-targets.txt` moved 8 → 0,
+  and lifting the restriction is a separate decision.
 
 - **erika is a workspace** (1.0.10-beta front `02-packaging` step 2, decisions 75 and 76). The
   root `botopink.json` declares members and is never a package — no `src`, `entry`, `files` or

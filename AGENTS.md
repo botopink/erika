@@ -52,11 +52,6 @@ erika/
 │   └── erika-linq/    ← member `erika-linq` (an application: entry main.bp, target
 │                        commonJS, targets ["commonJS"], depends on the core with
 │                        { "erika": { "workspace": true } })
-├── repro/             ← minimal reproductions handed back to botopink-lang, each a
-│                        self-contained package with NO erika in it. Not a workspace
-│                        member (the root globs `modules/*` and `examples/*` only), so
-│                        neither the gate nor `botopink-lib-test` runs anything here.
-│                        A directory is deleted in the commit that lands its fix.
 └── scripts/git-hooks/ ← the pre-commit gate (§ Local gate): `botopink test` per
                          `modules/*` member, `botopink build` per example
 ```
@@ -265,36 +260,31 @@ for them.
 
 ### Recorded gaps
 
-- **`examples/erika-linq` is red on erlang — a botopink-lang defect, not erika's.**
-  `botopink test --target erlang` there is **1 passed / 8 failed**, every one
-  `{error, badarg}`; commonJS is 9/9. The example restricts its `targets` to
-  `["commonJS"]`, and botopink-lang's `scripts/restricted-targets.txt` measures what
-  that restriction hides (line `erika-linq erlang 8`).
+- **`examples/erika-linq` was red on erlang — a botopink-lang defect, not erika's** —
+  **fixed** in botopink-lang `2e6bb4ac` (`00 · 02-erlang`). Re-measured 2026-09-21 with
+  this library untouched: `botopink test --target erlang` in the example goes from
+  **1 passed / 8 failed**, every one `{error, badarg}`, to **9 passed / 0 failed**;
+  commonJS was and stays 9/0.
 
-  **Cause.** A method name declared by TWO records of an *imported* module is
-  resolved by the name alone. `Query<T>` and `Grouping<K, V>` both declare
-  `toArray`, so every `.toArray()` a consumer writes is emitted as
-  `erika@erika__t__grouping:toArray/1` — `element(3, Self)` applied to a `Query`
-  tuple of size 2. The erlang backend already counts dissent for a LOCAL collision
-  (`putMethodOwner` clears the entry when a second type claims `name/arity`) and,
-  since `fcc0244b`, for a FIELD collision (`uniqueRecordWithField` → `'__bp_field'/2`,
-  which asks the value's own tag). The IMPORTED-method map (`imported_fns`,
-  `importedFnOwner`) is keyed by name only, with no arity and no dissent check — it is
-  the method twin of a defect already fixed on the field axis.
+  **The shape, kept because it outlives the defect.** A method name declared by TWO
+  records of an *imported* module used to be resolved by the name alone. `Query<T>` and
+  `Grouping<K, V>` both declare `toArray`, so every `.toArray()` a consumer wrote was
+  emitted as `erika@erika__t__grouping:toArray/1` — `element(3, Self)` applied to a
+  `Query` tuple of size 2. The erlang backend already counted dissent for a LOCAL
+  collision (`putMethodOwner` clears the entry when a second type claims `name/arity`)
+  and, since `fcc0244b`, for a FIELD collision (`uniqueRecordWithField` →
+  `'__bp_field'/2`, which asks the value's own tag); the IMPORTED-method map
+  (`imported_fns`, `importedFnOwner`) was keyed by the name only, with no arity and no
+  dissent check. It is now counted over the program by `name/arity` like the other two,
+  and one dissenting declaration sends the call through `'__bp_method'/3`, the method
+  twin of `'__bp_field'/2`. Two `pub` methods sharing a name across two records of one
+  imported module is ordinary surface here — `toArray` is the fluent terminal AND how a
+  `groupBy` bucket is read (`odds.toArray()`) — so a divergence of this shape is worth
+  measuring on both targets before it is read as erika's.
 
-  **Owner: botopink-lang `00 · 02-erlang`.** Handed back with a measurement, no erika in
-  it: [`repro/erlang-imported-method-name/`](repro/erlang-imported-method-name/), whose
-  README carries the real stacktrace, the side-by-side local/imported emission, and the
-  two measurements below. The count becomes **0**, not smaller, when the fix lands.
-
-  **Not worked around here, deliberately.** Renaming `Grouping.toArray` takes the example
-  to 9/9 in one edit — that is how the single cause was established — but `toArray` is
-  `pub` surface on both types (the fluent terminal, and how a `groupBy` bucket is read:
-  `odds.toArray()`), so renaming it is an API break invented to route around a compiler
-  defect. Dispatching on the receiver's own tag instead
-  (`apply(element(1, V), toArray, [V])`, the method twin of `'__bp_field'/2`) also gives
-  9/9, measured by patching the generated `main.erl`. The example and the library are
-  untouched.
+  The example's `targets` still reads `["commonJS"]`; botopink-lang's
+  `scripts/restricted-targets.txt` now measures that restriction at **0**
+  (`erika-linq erlang 0`), and lifting it is a separate decision.
 
 - **`erika "…"` resolves only `val` collections, not `var`.** The template reads
   the caller's *comptime* scope snapshot, which captures immutable `val` bindings

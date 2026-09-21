@@ -1,9 +1,0 @@
-{
-  "name": "erlang-imported-method-name",
-  "version": "0.0.1",
-  "description": "Minimal repro, no erika: a method name declared by TWO imported records dispatches on the name alone, so the erlang backend calls the wrong record's function on the right record's tuple",
-  "src": "src/",
-  "entry": "main.bp",
-  "target": "erlang",
-  "targets": ["commonJS", "erlang"]
-}
