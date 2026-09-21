@@ -5,6 +5,10 @@
 # without extra config, then run `zig build test-libs -- --lib erika
 # --target <matrix.target>`.
 #
+# `repository/erika/` is a workspace (decision 75): the `repository/` root
+# contributes its members by manifest name, so `--lib erika` selects the
+# member `modules/erika/` and the umbrella has no row.
+#
 # `BOTOPINK_LANG_REF` (repo variable, default `feat`) lets the lib pin a
 # specific botopink-lang SHA during a compiler-version dance.
 name: test

@@ -4,8 +4,10 @@
 > Sibling (AGENTS): [`./AGENTS.md`](AGENTS.md) · Docs: [`./docs.md`](docs.md)
 > Parent (workspace): [`../AGENTS.md`](../AGENTS.md)
 
-All examples assume `erika` is a declared dependency
-(`"dependencies": ["erika"]` in `botopink.json`).
+All examples assume `erika` is a declared dependency — the object form, one source per entry:
+`"dependencies": { "erika": { "git": "https://github.com/botopink/erika.git", "branch": "feat" } }`
+in `botopink.json`, or `{ "erika": { "workspace": true } }` from a sibling member of erika's own
+workspace (which is what [`./examples/erika-linq/`](examples/erika-linq/) uses).
 
 ## The fluent layer
 

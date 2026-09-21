@@ -3,8 +3,11 @@
 #
 # Sourced by scripts/git-hooks/pre-commit. It is the only runner: it needs
 # nothing outside this repository (standalone clone, meta checkout, worktree,
-# bpmp packing). Stages: conflict markers in staged files, `botopink test`,
-# then `botopink build` of every example (runExamplesGate — CI calls it too).
+# bpmp packing). Stages: conflict markers in staged files, `botopink test`
+# (per member under modules/*/ when the root botopink.json is a workspace —
+# decision 75: the umbrella compiles nothing and `botopink test` there is a
+# refusal — else over the package's own src/ + test/), then `botopink build`
+# of every example (runExamplesGate — CI calls it too).
 set -euo pipefail
 
 RED='\033[0;31m'
@@ -62,23 +65,48 @@ runStandaloneGate() {
     fi
 
     # 2. botopink test.
-    if [ -z "$(find src test 2>/dev/null -name '*.bp' ! -name '*.d.bp' | head -1)" ]; then
-        echo "  (no .bp sources under src/ or test/ — nothing to test)"
-        return 0
-    fi
     local bin
-    if ! bin=$(locateBotopink); then
-        warn "botopink binary not found (env BOTOPINK_BIN, ancestor zig-out/bin, or \$PATH) — skipping .bp gate"
-        return 0
-    fi
-    echo -n "  Testing $(basename "$root") (botopink test)... "
-    if ( cd "$root" && "$bin" test ) >/dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC}"
+    if grep -q '"workspaces"' "$root/botopink.json" 2>/dev/null; then
+        # A workspace: one `botopink test` per library member (modules/*/ with a
+        # botopink.json), each on its own manifest target. The examples are
+        # applications and are built by stage 3.
+        if ! bin=$(locateBotopink); then
+            warn "botopink binary not found (env BOTOPINK_BIN, ancestor zig-out/bin, or \$PATH) — skipping .bp gate"
+            return 0
+        fi
+        local member found=""
+        for member in "$root"/modules/*/; do
+            [ -f "$member/botopink.json" ] || continue
+            found=1
+            echo -n "  Testing modules/$(basename "$member") (botopink test)... "
+            if ( cd "$member" && "$bin" test ) >/dev/null 2>&1; then
+                echo -e "${GREEN}✓${NC}"
+            else
+                echo -e "${RED}✗${NC}"
+                echo
+                echo "  Re-run for failure output:  ( cd $member && $bin test )"
+                fail "$(basename "$member"): botopink test failed"
+            fi
+        done
+        [ -n "$found" ] || fail "botopink.json is a workspace but no modules/*/ holds a botopink.json"
     else
-        echo -e "${RED}✗${NC}"
-        echo
-        echo "  Re-run for failure output:  ( cd $root && $bin test )"
-        fail "$(basename "$root"): botopink test failed"
+        if [ -z "$(find src test 2>/dev/null -name '*.bp' ! -name '*.d.bp' | head -1)" ]; then
+            echo "  (no .bp sources under src/ or test/ — nothing to test)"
+            return 0
+        fi
+        if ! bin=$(locateBotopink); then
+            warn "botopink binary not found (env BOTOPINK_BIN, ancestor zig-out/bin, or \$PATH) — skipping .bp gate"
+            return 0
+        fi
+        echo -n "  Testing $(basename "$root") (botopink test)... "
+        if ( cd "$root" && "$bin" test ) >/dev/null 2>&1; then
+            echo -e "${GREEN}✓${NC}"
+        else
+            echo -e "${RED}✗${NC}"
+            echo
+            echo "  Re-run for failure output:  ( cd $root && $bin test )"
+            fail "$(basename "$root"): botopink test failed"
+        fi
     fi
 
     # 3. every example builds, unless listed as known broken.

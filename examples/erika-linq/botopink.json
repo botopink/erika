@@ -1,11 +1,14 @@
 {
-    "name": "erika-linq",
-    "version": "0.0.1",
-    "target": "commonJS",
-    "dependencies": {
-        "erika": {
-            "git": "https://github.com/botopink/erika.git",
-            "branch": "feat"
-        }
+  "name": "erika-linq",
+  "version": "0.0.1",
+  "description": "erika showcase — the fluent Query<T> layer and both `erika \"…\"` SQL forms consumed cross-module; mirrors examples.md",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "commonJS",
+  "targets": ["commonJS"],
+  "dependencies": {
+    "erika": {
+      "workspace": true
     }
+  }
 }

@@ -21,23 +21,47 @@ loader, so erika graduated to its own package: it is reached **only** through
 
 ## Tree
 
+The repository is a **workspace** (decision 75 of 1.0.10-beta): the root `botopink.json` declares
+members and is never a package — no `src`, `files`, `entry` or `dependencies`, and `botopink
+build/check/run/test` there is the located refusal `botopink.json is a workspace, not a package —
+run this command inside one of its members: erika, erika-linq`. Every `modules/*/` and
+`examples/*/` holding a `botopink.json` is a member, named by its own manifest. The **core is the
+member `modules/erika/`**; `from "erika"` resolves to it, never to the umbrella.
+
 ```text
 erika/
 ├── AGENTS.md          ← you are here
 ├── docs.md            ← what this lib provides + the grammar + loading notes
 ├── examples.md        ← both forms (fluent + `erika "…"`), runnable
-├── botopink.json      ← package metadata (files: ["root.bp", "erika.bp"])
-└── src/
-    ├── root.bp        ← module-tree root: `pub default mod erika;` (public +
-                         DEFAULT surface — the `import erika` handle)
-    └── erika.bp       ← the whole lib: `type Query<T>` + `Grouping<K,V>` +
-                         constructors + the `pub default fn erika` template fn
-                         (lexer + parser + dual lowering) + in-file tests
+├── botopink.json      ← WORKSPACE: name erika · version · description ·
+│                        workspaces ["modules/*", "examples/*"]. No `targets`: a member
+│                        runs on every target the runner is asked for (erika is green on
+│                        commonJS and erlang, and `botopink test` has no beam backend).
+│                        Nothing is importable from it.
+├── modules/
+│   └── erika/         ← THE CORE — what `from "erika"` gives a consumer
+│       ├── botopink.json  name erika · src src/ · entry root.bp · target commonJS ·
+│       │                    files ["root.bp", "erika.bp"] · no dependencies
+│       └── src/
+│           ├── root.bp    ← module-tree root: `pub default mod erika;` (public +
+│           │                DEFAULT surface — the `import erika` handle)
+│           └── erika.bp   ← the whole lib: `type Query<T>` + `Grouping<K,V>` +
+│                            constructors + the `pub default fn erika` template fn
+│                            (lexer + parser + dual lowering) + in-file tests
+├── examples/
+│   └── erika-linq/    ← member `erika-linq` (an application: entry main.bp, target
+│                        commonJS, targets ["commonJS"], depends on the core with
+│                        { "erika": { "workspace": true } })
+└── scripts/git-hooks/ ← the pre-commit gate (§ Local gate): `botopink test` per
+                         `modules/*` member, `botopink build` per example
 ```
+
+There is no `modules/erika-test/` yet: the `<lib>-test` member of `02-packaging` § 5 waits on
+`01-std`'s `std/asserts` and `std/snapshots` (front 02 step 4).
 
 ## Module tree (`root.bp`) + the package handle
 
-`src/root.bp` is the explicit module-tree root: `pub default mod erika;` declares
+`modules/erika/src/root.bp` is the explicit module-tree root: `pub default mod erika;` declares
 the single public module AND marks it the package's DEFAULT module (the
 `import erika` handle), so the package builds from the tree, not a deprecated
 blind `src/` scan. A consumer reaches the named items via `import {…} from "erika"`
@@ -47,8 +71,9 @@ blind `src/` scan. A consumer reaches the named items via `import {…} from "er
 ordinary template path. (The driver keys the alias by the *handle*, not the fn
 name, so a handler need not share the lib's name; this lib keeps the name `erika`
 so the generic-loader namespace form `erika.of(…)` still resolves through it.)
-Both `root.bp` and `erika.bp` are listed in `botopink.json` `files` — the
-`pub default mod` declaration only reaches consumers if its module ships.
+Both `root.bp` and `erika.bp` are listed in `modules/erika/botopink.json` `files` — the
+`pub default mod` declaration only reaches consumers if its module ships, and a workspace
+member that is a library and lists no `files` is `✗ ships nothing`.
 
 ## Design at a glance
 
@@ -96,11 +121,13 @@ Both `root.bp` and `erika.bp` are listed in `botopink.json` `files` — the
   *generic* loader; erika adds no Zig and is named nowhere in `compiler-core`.
 - **Imported, never prelude.** Reached via `from "erika"` — the CLI's generic
   loader ([`../botopink-lang/modules/compiler-cli/src/cli/libs.zig`](../botopink-lang/modules/compiler-cli/src/cli/libs.zig))
-  resolves `dependencies: ["erika"]` to `repository/erika/src/erika.bp` as the
-  `erika/erika` package module via the multi-root walk. No per-lib registry,
-  no embed.
-- **Tests live here.** `test { … }` blocks inside `src/erika.bp`, run by
-  `botopink test` from this directory — not in the compiler's Zig suites. The
+  resolves `"dependencies": { "erika": { … } }` to the workspace member
+  `repository/erika/modules/erika/`, shipping `src/erika.bp` as the `erika/erika`
+  package module. A root contributes every member of a workspace found there,
+  **named by its manifest**, so the umbrella never answers the name. No per-lib
+  registry, no embed.
+- **Tests live here.** `test { … }` blocks inside `modules/erika/src/erika.bp`, run by
+  `botopink test` from `modules/erika/` — not in the compiler's Zig suites. The
   cross-module consumer story lives in [`./examples/erika-linq/`](examples/erika-linq/)
   (`botopink test` green there too).
 - **Every empty array literal is born with its element type** — `var out:
@@ -108,7 +135,7 @@ Both `root.bp` and `erika.bp` are listed in `botopink.json` `files` — the
   a type argument only where the value is born, so the bare form declares
   `unknown[]`: a warning today and an error once front 06's checker lands.
   Inside the `erika "…"` template body the element type is the tuple the body
-  documents at `src/erika.bp:375` — a token is `#(string, string, Span)`, a
+  documents at `modules/erika/src/erika.bp:375` — a token is `#(string, string, Span)`, a
   projected field `#(string, Span)`, a comparison the seven-element tuple
   `buildCmp` answers.
 - Keep this file, `docs.md`, `examples.md`, and the spec in sync in the same
@@ -260,7 +287,7 @@ Two workflows under `.github/workflows/`:
 
 | Workflow      | Trigger                  | What                                                                |
 | ------------- | ------------------------ | ------------------------------------------------------------------- |
-| `test.yml`    | push / PR (feat/master/main) | Matrix `{ubuntu-22.04, macos-14, windows-2022} × {commonJS, erlang, beam}` (windows = commonJS-only — `escript` ships cleanly only on linux + macos). Bootstrap path: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, then `zig build install && zig build test-libs -- --lib erika --target <t>`. The `erlang` rows are hard cells (no `allow_fail`; 31/31 on erlang). `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `feat`). |
+| `test.yml`    | push / PR (feat/master/main) | Matrix `{ubuntu-22.04, macos-14, windows-2022} × {commonJS, erlang, beam}` (windows = commonJS-only — `escript` ships cleanly only on linux + macos). Bootstrap path: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, then `zig build install && zig build test-libs -- --lib erika --target <t>`. `--lib erika` now names the **member** `modules/erika/` (a root contributes a workspace's members by manifest name), so the umbrella has no row. The `erlang` rows are hard cells (no `allow_fail`; 31/31 on erlang). `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `feat`). |
 | `tag.yml`    | push to feat/master/main | Reads `version` from `botopink.json`. **feat** → moving `<version>-feat` tag (force-pushed on every push). **master/main** → immutable `<version>` tag (no-op on the same SHA; hard error if the version was not bumped). Uses the built-in `github.token`. |
 
 ## Tagging — "release is a manifest change"
@@ -300,8 +327,12 @@ git config core.hooksPath scripts/git-hooks
 ```
 
 `core.hooksPath` is per clone and applies to every worktree of it. The
-gate checks staged files for conflict markers, then runs `botopink test`
-over `src/` + `test/`. The compiler binary is located via (in order)
+gate checks staged files for conflict markers, then — because the root
+`botopink.json` carries `"workspaces"` — runs one `botopink test` inside
+every `modules/*/` member on its own manifest target (the umbrella
+compiles nothing, so testing it would be the workspace refusal). The
+examples are applications and are built by the next stage.
+The compiler binary is located via (in order)
 `$BOTOPINK_BIN`, the nearest ancestor
 `repository/botopink-lang/zig-out/bin/botopink`, then `$PATH`. If none
 resolve, the gate prints a yellow warning and exits 0 — CI runs the full

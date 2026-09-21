@@ -10,6 +10,10 @@ backing. Reached via `from "erika"`.
 
 ## Install
 
+```json
+"dependencies": { "erika": { "git": "https://github.com/botopink/erika.git", "branch": "feat" } }
+```
+
 ```bp
 import erika, {of, Query} from "erika";
 ```
@@ -17,6 +21,14 @@ import erika, {of, Query} from "erika";
 `erika` is the package handle (binds the `erika "…"` template). `of`
 constructs a `Query<T>` over an `Array<T>` — `from` is the import keyword
 and cannot name a function, so the wrapper is spelled `of`.
+
+## Layout
+
+`repository/erika/botopink.json` is a **workspace** (`"workspaces": ["modules/*", "examples/*"]`,
+decision 75 of 1.0.10-beta): it compiles nothing and ships nothing. The library is the member
+[`modules/erika/`](modules/erika/) — `from "erika"` resolves to it — beside the runnable example
+[`examples/erika-linq/`](examples/erika-linq/), which depends on the core with
+`{ "erika": { "workspace": true } }`. `botopink test` runs inside a member, never at the root.
 
 ## Forms
 

@@ -9,17 +9,23 @@
 `erika` is botopink's answer to C#'s **LINQ**: a fluent query vocabulary over
 `Array<T>`, plus a SQL-subset `erika "…"` template. It is **opt-in** — reached via
 `from "erika"`, never auto-loaded into the type environment — and **pure
-botopink**: the whole library is `src/erika.bp`, with zero compiler surface.
+botopink**: the whole library is `modules/erika/src/erika.bp`, with zero compiler surface.
 
 ## Loading
 
-erika is resolved by the generic external-lib loader. Declare it as a dependency
-and import what you need:
+`repository/erika/` is a **workspace** (`"workspaces": ["modules/*", "examples/*"]`); the library
+is its member `modules/erika/`, and `from "erika"` resolves to that member, never to the umbrella.
+Declare it as a dependency and import what you need:
 
 ```jsonc
-// botopink.json
+// botopink.json — `dependencies` is the object form, one source per entry
 { "name": "myapp", "target": "commonJS", "src": "src/",
-  "dependencies": ["erika"] }
+  "dependencies": { "erika": { "git": "https://github.com/botopink/erika.git", "branch": "feat" } } }
+```
+
+```jsonc
+// …or, for a sibling member of erika's own workspace:
+{ "dependencies": { "erika": { "workspace": true } } }
 ```
 
 ```bp
@@ -27,12 +33,14 @@ import {erika} from "erika";   // the `erika` namespace + the `erika "…"` temp
 import {Query} from "erika";   // the Query<T> type (for annotations)
 ```
 
-The loader walks up from `cwd` and, at each ancestor, considers these roots
-(nearest-first): `repository/botopink-lang/libs`, `repository/`, and a legacy
-flat `libs/`. The first root holding `erika/botopink.json` wins (in this
-workspace that's `repository/erika/`); it compiles `src/erika.bp` as the
-`erika/erika` package module. There is no embed and no per-lib registry — the
-compiler core never names erika.
+The loader walks up from `cwd` and, at each ancestor, considers these roots (nearest-first): the
+ancestor itself when its `botopink.json` is a workspace, `repository/botopink-lang/libs`,
+`repository/`, a legacy flat `libs/`, then `.botopinkbuild/deps/`. A root contributes every
+immediate child holding a `botopink.json` **and every member of a workspace found there, named by
+its own manifest** — so `repository/` contributes `erika` (the member `repository/erika/modules/erika/`)
+and `erika-linq`, and never the umbrella. The member's `files` — `root.bp` and `erika.bp` — are the
+only modules a consumer sees. There is no embed and no per-lib registry — the compiler core never
+names erika.
 
 ## The fluent layer — `Query<T>`
 
