@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **The 8 red erlang cells of `examples/erika-linq` are diagnosed and handed back**
+  (botopink-lang `00 · 02-erlang`). Measured 2026-09-21 against botopink-lang feat
+  `c1c0f71c`: `botopink test --target erlang` in the example is 1 passed / 8 failed,
+  every one `{error, badarg}` — not `{error, undef}`, as the packaging note below
+  recorded before anyone read the stack. The real frame is
+  `erlang:element(3, {erika@erika__t__query, […]})` inside
+  `erika@erika__t__grouping:toArray/1`: a method name declared by TWO records of an
+  imported module (`Query.toArray` and `Grouping.toArray`) is resolved by the NAME
+  alone, so the call enters the wrong record's module and reads its field offset off
+  the right record's tuple. The backend already counts dissent for a local collision
+  and, since `fcc0244b`, for a field collision — this is the same defect on the
+  imported-method axis. Two measurements pin it: removing the name collision gives
+  9/9, and dispatching on the receiver's own tag
+  (`apply(element(1, V), toArray, [V])`) gives 9/9. **Neither is committed** — a
+  library workaround for a compiler defect is not a fix. New
+  [`repro/erlang-imported-method-name/`](repro/erlang-imported-method-name/) hands it
+  back: a self-contained package with no erika in it, carrying the local collision as
+  a green control beside the imported one. `modules/erika` stays 31/31 on both
+  targets; `examples/erika-linq` stays 9/9 on commonJS and its `targets` array is
+  unchanged.
+
 - **erika is a workspace** (1.0.10-beta front `02-packaging` step 2, decisions 75 and 76). The
   root `botopink.json` declares members and is never a package — no `src`, `entry`, `files` or
   `dependencies`, and `botopink build/check/run/test` there is the located refusal that names the
@@ -17,9 +38,10 @@
   Measured unchanged across the move: `modules/erika` 31/31 on commonJS and 31/31 on erlang,
   `examples/erika-linq` 9/9 and building; `botopink format --check` still reports the same two
   files (`modules/erika/src/erika.bp`, `examples/erika-linq/src/main.bp`) — pre-existing.
-  `examples/erika-linq` on the erlang target is red (`{error, undef}`, 1 passed / 8 failed), which
+  `examples/erika-linq` on the erlang target is red (1 passed / 8 failed), which
   is why the example restricts its `targets` to `["commonJS"]`; it is the cross-module erlang
-  codegen red that predates this front.
+  codegen red that predates this front. (Recorded here as `{error, undef}`; the measured shape
+  is `{error, badarg}` — diagnosed in the entry above.)
 
 - **The 1.0.3 surface** (botopink-lang front 12): `Query`/`Grouping` and the test fixtures are
   `type`s; every `record { … }` literal is a tuple. `select a, b` projects `#(a, b)` per row

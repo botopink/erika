@@ -1,0 +1,37 @@
+// The OWNING module: two records that declare a method of the SAME name, whose
+// payload sits at a DIFFERENT field offset.
+//
+// Nothing here is erika, and nothing here is a template, a sub-language or an
+// `@ExprCustom` — the defect needs only two records sharing a method name and a
+// consumer in a different module.
+
+pub type Query<T>(
+    items: Array<T>,
+) {
+    // Emitted as `shapes__t__query:toArray/1` → `element(2, Self)`.
+    pub fn toArray(self: Self) -> Array<T> {
+        return self.items;
+    }
+}
+
+pub type Grouping<K, V>(
+    key: K,
+    items: Array<V>,
+) {
+    // Emitted as `shapes__t__grouping:toArray/1` → `element(3, Self)`.
+    pub fn toArray(self: Self) -> Array<V> {
+        return self.items;
+    }
+}
+
+pub fn of<T>(xs: Array<T>) -> Query<T> {
+    return Query(items: xs);
+}
+
+// In the owning module both calls lower correctly — inference places the
+// receiver, and each call goes into its own record's module. This cell is green
+// on erlang.
+test "in the owning module both toArrays read their own record" {
+    assert of([1, 2, 3]).toArray().length == 3;
+    assert Grouping(key: "k", items: [1, 2]).toArray().length == 2;
+}
