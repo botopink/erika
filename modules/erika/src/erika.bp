@@ -393,7 +393,7 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     // operandCode detects the placeholder prefix and emits it verbatim so
     // `infer.substituteHoles` swaps in the caller's expression after build().
     var sql = "";
-    loop (q.parts()) { p ->
+    for (q.parts()) { p ->
         if (p.kind == "Text") sql = sql + p.text;
         if (p.kind == "Interp") sql = sql + p.code;
     };
@@ -441,17 +441,19 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
         out;
     };
     // A comparison group's tokens → a flat comparison tuple (`left [op right]`).
-    // Positional extraction uses the two-parameter loop's index (the loop folds
+    // Positional extraction counts the items in a `var` (the loop folds
     // `lTok`/`opTok`/`rTok` out); a dangling operator (2 tokens) is a `failAt` at
     // the operator.
     val buildCmp = { cmpToks ->
         var lTok = blankTok;
         var opTok = blankTok;
         var rTok = blankTok;
-        loop (cmpToks) { ct, idx ->
+        var idx = 0;
+        for (cmpToks) { ct ->
             if (idx == 0) lTok = ct;
             if (idx == 1) opTok = ct;
             if (idx == 2) rTok = ct;
+            idx = idx + 1;
         };
         val cnt = cmpToks.length;
         if (cnt == 2) q.failAt(opTok.2, "erika: condition needs a value after '" + opTok.1 + "'");
@@ -460,7 +462,7 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     };
 
     // ── ① lexer: chars → Token[] with real spans ──────────────────────────────
-    // `loop (chars) { ch, i }` binds the char and its byte offset. Every token is
+    // `for (chars) { ch -> }` binds the char; `pos` counts its byte offset. Every token is
     // emitted through a SINGLE `toks.append` site (the `pending` flush): word
     // chars and operator chars (`< > = !`) accumulate into one token; whitespace,
     // commas, `*`, parens and `'…'` strings are their own boundaries; a token
@@ -473,7 +475,10 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     var curKind = "";
     var curStart = 0;
     var strClosed = false;
-    loop (chars) { ch, i ->
+    var pos = 0;
+    for (chars) { ch ->
+        val i = pos;
+        pos = pos + 1;
         val isWs = ch == " " || ch == "\n" || ch == "\r" || ch == "\t";
         val isComma = ch == ",";
         val isStar = ch == "*";
@@ -525,7 +530,7 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     var whereToks: Array<#(string, string, Span)> = [];
     var orderToks: Array<#(string, string, Span)> = [];
     var section = "head";
-    loop (toks) { t ->
+    for (toks) { t ->
         val tk = t.0;
         val tx = t.1;
         val isFrom = tk == "keyword" && tx == "from";
@@ -558,7 +563,7 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     var orGroups: Array<Array<#(string, string, string, Span, string, string, bool)>> = [];
     var curAnd: Array<#(string, string, string, Span, string, string, bool)> = [];
     var curCmp: Array<#(string, string, Span)> = [];
-    loop (whereToks) { t ->
+    for (whereToks) { t ->
         val isAnd = t.0 == "keyword" && t.1 == "and";
         val isOr = t.0 == "keyword" && t.1 == "or";
         val isConn = isAnd || isOr;
@@ -582,7 +587,7 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     var orderName = "";
     var orderSpan = Span(0, 0, 1);
     var orderDesc = false;
-    loop (orderToks) { ot ->
+    for (orderToks) { ot ->
         val isAsc = ot.1 == "asc";
         val isDesc = ot.1 == "desc";
         if (isDesc) orderDesc = true;
@@ -622,7 +627,7 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
             pipe = pipe + ".select({ row -> " + binds + "#(" + names + ") }).toArray()";
         };
         var nodes: Array<CustomNode> = [];
-        loop (toks) { t ->
+        for (toks) { t ->
             val tk = t.0;
             val tx = t.1;
             val isLogical = tk == "keyword" && (tx == "and" || tx == "or");
