@@ -173,12 +173,11 @@ What the body may call:
   needs no counter loop. There is **no `@Option` in the body**: `.at(i).unwrapOr(…)`
   is the "no primitive type provides `.unwrapOr`" error. "Optional" `where` /
   `order` clauses are therefore 0-length-list sentinels.
-- **A two-parameter `loop` that reassigns outer `var`s** — `loop (xs) { x, i ->
-  acc = … }` lowers to `lists:foldl` over `lists:enumerate(0, Xs)` and threads
-  every reassigned variable out, with or without an explicit `, 0..` range, like
-  the one-parameter form (item 7b, fixed in `codegen/erlang.zig` in 1.0.4-beta).
-  `buildCmp` (`loop (cmpToks) { ct, idx -> }`) and the lexer
-  (`loop (chars) { ch, i -> }`) rely on it. A mutation through a method in a
+- **A `for` that reassigns outer `var`s** — `for (xs) { x -> acc = … }` lowers
+  to `lists:foldl` and threads every reassigned variable out. `for` binds the
+  item only (decision 105 has no index binder), so `buildCmp`
+  (`for (cmpToks) { ct -> }`) and the lexer (`for (chars) { ch -> }`) count the
+  position in a `var` of their own. A mutation through a method in a
   closure (`out.push(x)` inside `forEach`) threads out too.
 
 What it may not:
