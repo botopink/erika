@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **`modules/erika` reformatted after the method-chain rule** (botopink-lang `00 · C-12`, measured
+  at `f58fd392`): `src/erika.bp` only, 57+/32−, every hunk a chain of three or more calls broken one
+  call per line at `+4` — the word-and-literal token stream is identical before and after, the pass
+  is idempotent, the cell stays 31/31 on commonJS and erlang, and `examples/erika-linq`'s emitted
+  output is `diff -r` byte-identical on both targets. `examples/erika-linq/src/main.bp` is **not**
+  formatted: the formatter moves a trailing comment on an array-literal element below the element,
+  where it reads as the next element's — registered with front `00 · 16-formatter`, and `AGENTS.md`
+  § Formatting says why the file stays red. `AGENTS.md` re-derived at the same compiler: the three
+  "language-wide parser quirks" it listed (`if (a && b)`, `(expr).method()`, a comment inside a
+  closure body) all parse and run now, so they moved to the "safe to simplify" list; the header
+  and `docs.md` point at the 1.0.10-beta front instead of the deleted v0.beta.7 spec; and the
+  erlang output at C-01's per-type atom shape (`erika@erika__t__query.erl`) is recorded, with the
+  decision-109 respelling (`erika@erika@@Query`) named as the re-measure that follows it.
+
 - **The 8 red erlang cells of `examples/erika-linq` are fixed** — in botopink-lang
   `2e6bb4ac` (`00 · 02-erlang`), not here: nothing in `modules/erika` or
   `examples/erika-linq` was edited for them. Diagnosed 2026-09-21 against botopink-lang

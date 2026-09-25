@@ -3,7 +3,8 @@
 > Path: `repository/erika/`
 > Parent (workspace): [`../AGENTS.md`](../AGENTS.md) · Sibling (core): [`../botopink-lang/AGENTS.md`](../botopink-lang/AGENTS.md)
 > Docs: [`./docs.md`](docs.md) · Examples: [`./examples.md`](examples.md)
-> Spec: [`../../tasks/v0.beta.7/specs/erika.md`](../../tasks/v0.beta.7/specs/erika.md)
+> Front: [`../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md`](../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md)
+> (the front that owns this tree in 1.0.10-beta; the v0.beta.7 spec it was born from is gone)
 
 A **C#/LINQ-style query library** for botopink — a fluent, eager, immutable
 `type Query<T>` over `Array<T>`, plus an `erika "…"` SQL-subset **template fn**
@@ -141,6 +142,36 @@ member that is a library and lists no `files` is `✗ ships nothing`.
 - Keep this file, `docs.md`, `examples.md`, and the spec in sync in the same
   change that touches the lib.
 
+## Formatting
+
+`botopink format --check` is run per member, and the two answer differently on purpose:
+
+- **`modules/erika`** — exit 0 at botopink-lang `f58fd392`. The sources were formatted once at
+  decision 61's layout and again after `00 · C-12` landed the method-chain rule (a chain that does
+  not fit in 80 columns puts every call on its own line, `+4`; a hand-broken chain that fits is
+  joined). Each pass was verified before it was committed: the word-and-literal token stream of
+  `erika.bp` is identical before and after, the pass is idempotent, the cell stays 31/31 on both
+  targets, and `examples/erika-linq`'s emitted output is `diff -r` byte-identical on commonJS and
+  erlang. Re-run `format` here after every formatter construct the compiler lands; commit the
+  output only when those four measurements hold again.
+- **`examples/erika-linq/src/main.bp` is left as written** and its `format --check` is red by
+  design. The formatter re-attaches a trailing comment on an array-literal element
+  (`Box(label: "sq", w: 4, h: 4),   // w == h, h > 2`) to the line **below** the element, where a
+  reader takes it for the next element's — information lost, not layout changed. That is a
+  formatter trivia row (front `00 · 16-formatter`, the "Handed over by 09" table), registered there;
+  do not format the file until it round-trips, and do not rewrite the comments to dodge it.
+
+## Erlang output at the current module-atom shape
+
+The example's `--target erlang` output at `f58fd392` is one module per `type` under C-01's policy
+3 — `out/erl/erika@erika__t__query.erl`, `erika@erika__t__grouping.erl`, `main__t__person.erl`, …
+— and `botopink run --target erlang` in `examples/erika-linq` prints the same six lines the
+commonJS run prints (the `erlc` warnings about unused `array_range/2` / `array_repeat/2` are the
+compiler's, not erika's). Decision 109 respells that atom as `erika@erika@@Query` (the `@@`
+boundary, the declaration's case kept) when front `00 · 13-module-identity` lands it; nothing in
+this tree names the atom, so the change is invisible here, but both erlang cells (31 + 9) and the
+example's `run` are re-measured after it — front 09 step 4.
+
 ## Comptime-eval constraint (why the `erika "…"` parser is written the way it is)
 
 The `erika "…"` body runs at comptime in the **persistent Erlang runtime** — the
@@ -193,21 +224,18 @@ What it may not:
   the body is evaluated untyped, where a tuple label (`t.kind`) cannot be resolved to
   its index, so it would lower to `maps:get/2` on a tuple (`badmap`).
 
-Three language-wide parser quirks (not comptime-specific — they fail the same way in
-an ordinary fn):
-
-- **No comments inside a closure/loop body** (`{ x -> … }`) — they parse as an
-  unexpected token; keep comments at fn-body level.
-- A top-level binary boolean **directly inside an `if (…)` condition fails to
-  parse** (e.g. `if (a && b)`: unexpected token `&&`). Extract the compound to a
-  `val` first, then `if (theVal)`.
-- **`(expr).method()` fails to parse** — a parenthesized expression followed by a
-  method call (unexpected token `.`). Bind it to a `val` first
-  (`val padded = sql + " "; padded.split("")`).
-
 Shapes the body keeps that no longer have a constraint behind them (safe to
 simplify, not required):
 
+- The three parser quirks this file used to list — a `//` comment inside a
+  closure or loop body, a binary boolean directly inside an `if (…)` condition
+  (`if (a && b)`), and a parenthesized expression followed by a method call
+  (`(a + b).split("")`) — **all parse, check and run at botopink-lang
+  `f58fd392`** (measured 2026-09-25 with one scratch project holding the three
+  shapes: `check` exit 0, `run` prints `1` / `a,b` / `2`). The body still
+  extracts compound conditions to a `val` (`val padded = sql + " ";
+  padded.split("")`) and keeps comments at fn-body level; both are habits now,
+  not requirements.
 - `s.split("").length` for a string's length (`sqlLen`) — `s.length()` works.
 - Ending a lambda with a `val` instead of a bare `if … else …` (`cmpCode` /
   `operandCode`) — a closure whose last statement is an `if`-expression returns
@@ -336,7 +364,8 @@ resolve to the moving `<version>-feat` tag.
 
 ## See also
 
-- The spec (intent, steps, test scenarios) → [`../../tasks/v0.beta.7/specs/erika.md`](../../tasks/v0.beta.7/specs/erika.md).
+- The front that owns this tree (its steps, gate and open rows) →
+  [`../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md`](../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md).
 - The generic loader erika is a client of → [`../botopink-lang/modules/compiler-cli/src/cli/libs.zig`](../botopink-lang/modules/compiler-cli/src/cli/AGENTS.md).
 - The decorator-driven sibling client → [`../rakun/AGENTS.md`](../rakun/AGENTS.md).
 
@@ -368,6 +397,16 @@ fix the red instead.
 After `botopink test`, the gate builds every `examples/*/` that has a
 `botopink.json` (`runExamplesGate`, each with its own manifest target,
 into a throwaway `--out`); CI runs the same function once per workflow.
+The compiler-side twin of this gate is `zig build test-libs -- --lib erika --target <t>` (and
+`--lib erika-linq` for the example's cell), run from `repository/botopink-lang/`. **From a
+`.tasks/<name>/` worktree of the meta repository it refuses**: the runner walks up every
+ancestor's `repository/` and finds this library twice — the worktree's copy and the main
+checkout's — and a name that two libraries declare is a located refusal, not a pick (*"erika" is
+declared by two libraries … rename one of them*; decision 67, no flag lifts it). Run the runner
+binary from a directory outside the checkout with the worktree as the only root instead:
+`botopink-lib-test --bin <worktree>/repository/botopink-lang/zig-out/bin/botopink --lib-root
+<worktree>/repository --lib erika --target <t> --include-unsupported` — the same cell, one root.
+
 `scripts/known-broken-examples.txt` lists the examples allowed to fail —
 `examples/<name>  <reason>` per line — and cannot rot: a listed example
 that builds, or a listed path that no longer exists, fails the gate too.
