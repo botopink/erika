@@ -58,7 +58,7 @@ erika/
 ```
 
 There is no `modules/erika-test/` yet: the `<lib>-test` member of `02-packaging` § 5 waits on
-`01-std`'s `std/asserts` and `std/snapshots` (front 02 step 4).
+`01-std`'s `std/testing/asserts` and `std/testing/snapshots` (front 02 step 4).
 
 ## Module tree (`root.bp`) + the package handle
 
