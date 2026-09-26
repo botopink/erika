@@ -1,7 +1,7 @@
 # erika
 
 > Path: `repository/erika/`
-> Parent (workspace): [`../AGENTS.md`](../AGENTS.md) · Sibling (core): [`../botopink-lang/AGENTS.md`](../botopink-lang/AGENTS.md)
+> Parent (workspace): [`../../AGENTS.md`](../../AGENTS.md) · Sibling (core): [`../botopink-lang/AGENTS.md`](../botopink-lang/AGENTS.md)
 > Docs: [`./docs.md`](docs.md) · Examples: [`./examples.md`](examples.md)
 > Front: [`../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md`](../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md)
 > (the front that owns this tree in 1.0.10-beta; the v0.beta.7 spec it was born from is gone)
@@ -140,7 +140,8 @@ member that is a library and lists no `files` is `✗ ships nothing`.
 - **Every empty array literal is born with its element type** — `var out:
   Array<T> = [];`, never `var out = [];`. botopink-lang decision 8 §1.4 decides
   a type argument only where the value is born, so the bare form declares
-  `unknown[]`: a warning today and an error once front 06's checker lands.
+  `unknown[]`. The checker does not flag it yet (`val out = [];` checks clean);
+  the §1.4 diagnostic is `00 · 01-checker`'s (C-14).
   Inside the `erika "…"` template body the element type is the tuple the body
   documents at `modules/erika/src/erika.bp:375` — a token is `#(string, string, Span)`, a
   projected field `#(string, Span)`, a comparison the seven-element tuple
@@ -150,33 +151,32 @@ member that is a library and lists no `files` is `✗ ships nothing`.
 
 ## Formatting
 
-`botopink format --check` is run per member, and the two answer differently on purpose:
+`botopink format --check` exits 0 in every member — `modules/erika`, `modules/erika-test` and
+`examples/erika-linq` — and at the workspace root. The sources are kept in the canonical form:
+decision 61's layout, `00 · C-12`'s width rules (a chain or list that does not fit in 80 columns
+puts every part on its own line, `+4`; a hand-broken one that fits is joined), no `;` after a
+braced `if` / loop / `case` statement (decision 132, step 1) and a trailing comma keeping a list
+open (decision 133).
 
-- **`modules/erika`** — exit 0 at botopink-lang `f58fd392`. The sources were formatted once at
-  decision 61's layout and again after `00 · C-12` landed the method-chain rule (a chain that does
-  not fit in 80 columns puts every call on its own line, `+4`; a hand-broken chain that fits is
-  joined). Each pass was verified before it was committed: the word-and-literal token stream of
-  `erika.bp` is identical before and after, the pass is idempotent, the cell stays 31/31 on both
-  targets, and `examples/erika-linq`'s emitted output is `diff -r` byte-identical on commonJS and
-  erlang. Re-run `format` here after every formatter construct the compiler lands; commit the
-  output only when those four measurements hold again.
-- **`examples/erika-linq/src/main.bp` is left as written** and its `format --check` is red by
-  design. The formatter re-attaches a trailing comment on an array-literal element
-  (`Box(label: "sq", w: 4, h: 4),   // w == h, h > 2`) to the line **below** the element, where a
-  reader takes it for the next element's — information lost, not layout changed. That is a
-  formatter trivia row (front `00 · 16-formatter`, the "Handed over by 09" table), registered there;
-  do not format the file until it round-trips, and do not rewrite the comments to dodge it.
+Every reformat is verified before it is committed, by four measurements: the word-and-literal
+token stream and the comment text of each file are identical before and after; the pass is
+idempotent; the cells stay 31/31 (`modules/erika`), 1/1 (`modules/erika-test`) and 9/9
+(`examples/erika-linq`) on commonJS and erlang; and `examples/erika-linq`'s emitted output is
+`diff -r` byte-identical on both targets. Re-run `format` here after every formatter construct
+the compiler lands, and commit the output only when those four hold again. A hunk that loses
+information (a comment re-attached to another line, a member reordered) is a formatter row for
+`00 · 16-formatter`, not a reason to rewrite the source around it.
 
 ## Erlang output at the current module-atom shape
 
-The example's `--target erlang` output at `f58fd392` is one module per `type` under C-01's policy
-3 — `out/erl/erika@erika__t__query.erl`, `erika@erika__t__grouping.erl`, `main__t__person.erl`, …
-— and `botopink run --target erlang` in `examples/erika-linq` prints the same six lines the
-commonJS run prints (the `erlc` warnings about unused `array_range/2` / `array_repeat/2` are the
-compiler's, not erika's). Decision 109 respells that atom as `erika@erika@@Query` (the `@@`
-boundary, the declaration's case kept) when front `00 · 13-module-identity` lands it; nothing in
-this tree names the atom, so the change is invisible here, but both erlang cells (31 + 9) and the
-example's `run` are re-measured after it — front 09 step 4.
+The example's `--target erlang` output is one module per `type`, each atom
+`<package>@<path>@@<Decl>` (decision 109): `out/erl/erika@erika.erl`, `erika@root.erl`,
+`erika@erika@@Query.erl`, `erika@erika@@Grouping.erl`, `erika@erika@@ErikaProduct.erl`,
+`erika@erika@@ErikaCity.erl`, and the example's own `erika_linq@main.erl` and
+`erika_linq@main@@{Person,City,Box}.erl`. `botopink run --target erlang` in
+`examples/erika-linq` prints the same six lines the commonJS run prints; the `erlc` warnings
+(unused `array_range/2` / `array_repeat/2`, unused rebound locals in `Query`) are the
+compiler's emission, not erika's. Nothing in this tree names an atom.
 
 ## Comptime-eval constraint (why the `erika "…"` parser is written the way it is)
 
@@ -302,7 +302,7 @@ for them.
   **The shape, kept because it outlives the defect.** A method name declared by TWO
   records of an *imported* module used to be resolved by the name alone. `Query<T>` and
   `Grouping<K, V>` both declare `toArray`, so every `.toArray()` a consumer wrote was
-  emitted as `erika@erika__t__grouping:toArray/1` — `element(3, Self)` applied to a
+  emitted as `'erika@erika@@Grouping':toArray/1` (today's atom) — `element(3, Self)` applied to a
   `Query` tuple of size 2. The erlang backend already counted dissent for a LOCAL
   collision (`putMethodOwner` clears the entry when a second type claims `name/arity`)
   and, since `fcc0244b`, for a FIELD collision (`uniqueRecordWithField` →
@@ -315,9 +315,11 @@ for them.
   `groupBy` bucket is read (`odds.toArray()`) — so a divergence of this shape is worth
   measuring on both targets before it is read as erika's.
 
-  The example's `targets` still reads `["commonJS"]`; botopink-lang's
-  `scripts/restricted-targets.txt` now measures that restriction at **0**
-  (`erika-linq erlang 0`), and lifting it is a separate decision.
+  The example's `targets` still reads `["commonJS"]`, and botopink-lang's
+  `scripts/restricted-targets.txt` measures that restriction at **0** (`erika-linq erlang 0`):
+  the restriction has outlived its reason. Lifting it is two edits that land together — drop
+  `"targets"` from `examples/erika-linq/botopink.json` and delete the ledger line — because the
+  runner refuses a stale ledger line.
 
 - **`erika "…"` resolves only `val` collections, not `var`.** The template reads
   the caller's *comptime* scope snapshot, which captures immutable `val` bindings

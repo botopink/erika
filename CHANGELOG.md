@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Both members reformatted to today's canonical form** (decisions 132 and 133, C-12's width
+  rules): `modules/erika/src/erika.bp` drops the `;` after its braced `if` / `for` statements and
+  breaks the `if … else …` values that exceed 80 columns; `examples/erika-linq/src/main.bp` is
+  formatted for the first time — the formatter now keeps an array element's trailing comment on
+  its element's line, so the reason it was left red is gone. Word-and-literal tokens and comment
+  text identical before and after, idempotent, 31/31 · 1/1 · 9/9 on commonJS and erlang, and the
+  example's emitted output byte-identical on both targets. `format --check` exits 0 in every
+  member. `AGENTS.md` records the decision-109 atoms (`erika@erika@@Query`) as measured, and its
+  parent link points at the meta repository's `AGENTS.md`.
+
 - **Front 95 — `modules/erika-test/`.** The `<lib>-test` member every library
   carries (`specs/1.0.10-beta/02-packaging/README.md` § 5): an empty `pub`
   surface, `{ "erika": { "workspace": true } }`, and one inline test proving the

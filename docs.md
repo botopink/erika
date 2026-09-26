@@ -3,7 +3,7 @@
 > Path: `repository/erika/`
 > Sibling (AGENTS): [`./AGENTS.md`](AGENTS.md)
 > Examples: [`./examples.md`](examples.md)
-> Parent (workspace): [`../AGENTS.md`](../AGENTS.md)
+> Parent (workspace): [`../../AGENTS.md`](../../AGENTS.md)
 > Front: [`../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md`](../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md)
 
 `erika` is botopink's answer to C#'s **LINQ**: a fluent query vocabulary over

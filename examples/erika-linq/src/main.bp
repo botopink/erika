@@ -23,7 +23,7 @@ type Person(name: string, age: i32)
 val people = [
     Person(name: "Ann", age: 30),
     Person(name: "Bob", age: 17),
-    Person(name: "Cy",  age: 22),
+    Person(name: "Cy", age: 22),
     Person(name: "Dan", age: 15),
 ];
 
@@ -62,9 +62,7 @@ fn evenSquares() -> string {
 //    erika, showing the Query result and a raw `Iterator<T>` share the same
 //    vocabulary.
 fn loudNames() -> string {
-    return ["ann", "cy", "dan"]
-        .map({ n -> n.toUpper() })
-        .join(" / ");
+    return ["ann", "cy", "dan"].map({ n -> n.toUpper() }).join(" / ");
 }
 
 // ── the `erika "…"` SQL sub-language (cross-module) ───────────────────────────
@@ -77,9 +75,9 @@ fn loudNames() -> string {
 type City(name: string, pop: i32)
 
 val cities = [
-    City(name: "Lyon",  pop: 5),
+    City(name: "Lyon", pop: 5),
     City(name: "Paris", pop: 9),
-    City(name: "Nice",  pop: 3),
+    City(name: "Nice", pop: 3),
 ];
 
 // 5) single-line short form — `select field` projects one column → Array<string>.
@@ -100,7 +98,12 @@ fn bigCityLabels() -> string {
         where pop >= 5
         order by name asc
     """;
-    return rows.map({ r -> val #(name, pop) = r; name + ":" + pop.toString() }).join(", ");
+    return rows
+        .map({ r ->
+            val #(name, pop) = r;
+            name + ":" + pop.toString();
+        })
+        .join(", ");
 }
 
 // ── B2 net-new: two-column `where`, arg position, two queries in one scope ──
@@ -108,9 +111,9 @@ fn bigCityLabels() -> string {
 type Box(label: string, w: i32, h: i32)
 
 val boxes = [
-    Box(label: "sq",   w: 4, h: 4),   // w == h, h > 2
-    Box(label: "wide", w: 6, h: 2),   // w != h
-    Box(label: "tiny", w: 2, h: 2),   // w == h, h == 2
+    Box(label: "sq", w: 4, h: 4), // w == h, h > 2
+    Box(label: "wide", w: 6, h: 2), // w != h
+    Box(label: "tiny", w: 2, h: 2), // w == h, h == 2
 ];
 
 // 7) two-column `where`: `w = h` compares COLUMN-to-COLUMN (both lower to
@@ -128,11 +131,11 @@ fn countNames(xs: Array<string>) -> i32 {
 }
 
 fn main() {
-    @print(adultNames());     // Ann, Cy
-    @print(evenSquares());    // 4-16-36
-    @print(loudNames());      // ANN / CY / DAN
-    @print(bigCityNames());   // Lyon, Paris
-    @print(bigCityLabels());  // Lyon:5, Paris:9
+    @print(adultNames()); // Ann, Cy
+    @print(evenSquares()); // 4-16-36
+    @print(loudNames()); // ANN / CY / DAN
+    @print(bigCityNames()); // Lyon, Paris
+    @print(bigCityLabels()); // Lyon:5, Paris:9
     @print(squareBigBoxes()); // sq
 }
 
@@ -141,11 +144,11 @@ test "list → query → join: adult names, sorted" {
 }
 
 test "iterator fold over the query result sums the adult ages" {
-    assert adultAgeSum() == 52;          // 30 + 22
+    assert adultAgeSum() == 52; // 30 + 22
 }
 
 test "a number list piped through erika, then joined" {
-    assert evenSquares() == "4-16-36";   // 2², 4², 6²
+    assert evenSquares() == "4-16-36"; // 2², 4², 6²
 }
 
 test "iterator map/join stand alone on a list" {
@@ -167,7 +170,10 @@ test "erika where compares two columns (w = h) plus a column>literal" {
 }
 
 test "erika \"…\" expands in argument position" {
-    assert countNames(erika "select name from cities where pop >= 5 order by name asc") == 2;
+    assert countNames(
+        erika "select name from cities where pop >= 5 order by name asc",
+    )
+        == 2;
 }
 
 test "two erika strings in one scope expand to independent queries" {

@@ -2,7 +2,7 @@
 
 > Path: `repository/erika/`
 > Sibling (AGENTS): [`./AGENTS.md`](AGENTS.md) · Docs: [`./docs.md`](docs.md)
-> Parent (workspace): [`../AGENTS.md`](../AGENTS.md)
+> Parent (workspace): [`../../AGENTS.md`](../../AGENTS.md)
 
 All examples assume `erika` is a declared dependency — the object form, one source per entry:
 `"dependencies": { "erika": { "git": "https://github.com/botopink/erika.git", "branch": "feat" } }`
