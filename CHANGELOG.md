@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Front 95 — `modules/erika-test/`.** The `<lib>-test` member every library
+  carries (`specs/1.0.10-beta/02-packaging/README.md` § 5): an empty `pub`
+  surface, `{ "erika": { "workspace": true } }`, and one inline test proving the
+  core resolves from it — 1/1 on commonJS and erlang. The core stays 31/31.
+
 - **`modules/erika` reformatted after the method-chain rule** (botopink-lang `00 · C-12`, measured
   at `f58fd392`): `src/erika.bp` only, 57+/32−, every hunk a chain of three or more calls broken one
   call per line at `+4` — the word-and-literal token stream is identical before and after, the pass

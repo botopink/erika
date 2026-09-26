@@ -1,0 +1,16 @@
+{
+  "name": "erika-test",
+  "version": "0.0.1",
+  "description": "erika-test — test helpers for erika: assert<Subject>(loc, …) snapshot helpers over a query's rows and the `erika \"…\"` lowering, filled by erika's fronts — commonJS and erlang",
+  "src": "src/",
+  "entry": "root.bp",
+  "target": "commonJS",
+  "files": [
+    "root.bp"
+  ],
+  "dependencies": {
+    "erika": {
+      "workspace": true
+    }
+  }
+}
