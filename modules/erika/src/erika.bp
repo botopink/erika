@@ -22,28 +22,28 @@ pub type Query<T>(
     items: Array<T>,
 ) {
     // ── materializers / size ──────────────────────────────────────────────────
-    pub fn toArray(self: Self) -> Array<T> {
+    pub fn toArray(self: Self<T>) -> Array<T> {
         return self.items;
     }
 
-    pub fn toList(self: Self) -> Array<T> {
+    pub fn toList(self: Self<T>) -> Array<T> {
         return self.items;
     }
 
-    pub fn count(self: Self) -> i32 {
+    pub fn count(self: Self<T>) -> i32 {
         return self.items.length;
     }
 
-    pub fn isEmpty(self: Self) -> bool {
+    pub fn isEmpty(self: Self<T>) -> bool {
         return self.items.length == 0;
     }
 
     // ── F1: restriction / projection ──────────────────────────────────────────
-    pub fn where(self: Self, pred: fn(item: T) -> bool) -> Query<T> {
+    pub fn where(self: Self<T>, pred: fn(item: T) -> bool) -> Query<T> {
         return Query(items: self.items.filter(pred));
     }
 
-    pub fn select<U>(self: Self, selector: fn(item: T) -> U) -> Query<U> {
+    pub fn select<U>(self: Self<T>, selector: fn(item: T) -> U) -> Query<U> {
         return Query(items: self.items.map(selector));
     }
 
@@ -51,7 +51,7 @@ pub type Query<T>(
     // results are concatenated into one flat `Query<U>`. Unblocked by `fn() -> T[]`
     // in a function-type parameter (v0.beta.6 gap G3, landed in `feat`).
     pub fn selectMany<U>(
-        self: Self,
+        self: Self<T>,
         selector: fn(item: T) -> Array<U>,
     ) -> Query<U> {
         var out: Array<U> = [];
@@ -62,15 +62,15 @@ pub type Query<T>(
     }
 
     // ── F2: partitioning / ordering ───────────────────────────────────────────
-    pub fn take(self: Self, n: i32) -> Query<T> {
+    pub fn take(self: Self<T>, n: i32) -> Query<T> {
         return Query(items: self.items.take(n));
     }
 
-    pub fn skip(self: Self, n: i32) -> Query<T> {
+    pub fn skip(self: Self<T>, n: i32) -> Query<T> {
         return Query(items: self.items.drop(n));
     }
 
-    pub fn takeWhile(self: Self, pred: fn(item: T) -> bool) -> Query<T> {
+    pub fn takeWhile(self: Self<T>, pred: fn(item: T) -> bool) -> Query<T> {
         var out: Array<T> = [];
         var taking = true;
         self.items.forEach({ x ->
@@ -79,7 +79,7 @@ pub type Query<T>(
         return Query(items: out);
     }
 
-    pub fn skipWhile(self: Self, pred: fn(item: T) -> bool) -> Query<T> {
+    pub fn skipWhile(self: Self<T>, pred: fn(item: T) -> bool) -> Query<T> {
         var out: Array<T> = [];
         var skipping = true;
         self.items.forEach({ x ->
@@ -94,12 +94,12 @@ pub type Query<T>(
         return Query(items: out);
     }
 
-    pub fn reverse(self: Self) -> Query<T> {
+    pub fn reverse(self: Self<T>) -> Query<T> {
         return Query(items: self.items.reverse());
     }
 
     // Stable ascending sort by a projected comparable key (insertion by `<`).
-    pub fn orderBy<K>(self: Self, keyFn: fn(item: T) -> K) -> Query<T> {
+    pub fn orderBy<K>(self: Self<T>, keyFn: fn(item: T) -> K) -> Query<T> {
         var sorted: Array<T> = [];
         self.items.forEach({ x ->
             val kx = keyFn(x);
@@ -111,7 +111,7 @@ pub type Query<T>(
     }
 
     pub fn orderByDescending<K>(
-        self: Self,
+        self: Self<T>,
         keyFn: fn(item: T) -> K,
     ) -> Query<T> {
         var sorted: Array<T> = [];
@@ -125,7 +125,7 @@ pub type Query<T>(
     }
 
     // ── F3: set ops / grouping / joining ──────────────────────────────────────
-    pub fn distinct(self: Self) -> Query<T> {
+    pub fn distinct(self: Self<T>) -> Query<T> {
         var out: Array<T> = [];
         self.items.forEach({ x ->
             val fresh = out.indexOf(x) == -1;
@@ -134,7 +134,7 @@ pub type Query<T>(
         return Query(items: out);
     }
 
-    pub fn distinctBy<K>(self: Self, keyFn: fn(item: T) -> K) -> Query<T> {
+    pub fn distinctBy<K>(self: Self<T>, keyFn: fn(item: T) -> K) -> Query<T> {
         var out: Array<T> = [];
         var keys: Array<K> = [];
         self.items.forEach({ x ->
@@ -148,26 +148,26 @@ pub type Query<T>(
         return Query(items: out);
     }
 
-    pub fn concat(self: Self, other: Query<T>) -> Query<T> {
+    pub fn concat(self: Self<T>, other: Query<T>) -> Query<T> {
         return Query(items: self.items.append(other.items));
     }
 
-    pub fn union(self: Self, other: Query<T>) -> Query<T> {
+    pub fn union(self: Self<T>, other: Query<T>) -> Query<T> {
         return self.concat(other).distinct();
     }
 
-    pub fn intersect(self: Self, other: Query<T>) -> Query<T> {
+    pub fn intersect(self: Self<T>, other: Query<T>) -> Query<T> {
         val kept = self.items.filter({ x -> other.items.indexOf(x) != -1 });
         return Query(items: kept).distinct();
     }
 
-    pub fn except(self: Self, other: Query<T>) -> Query<T> {
+    pub fn except(self: Self<T>, other: Query<T>) -> Query<T> {
         val kept = self.items.filter({ x -> other.items.indexOf(x) == -1 });
         return Query(items: kept).distinct();
     }
 
     pub fn groupBy<K>(
-        self: Self,
+        self: Self<T>,
         keyFn: fn(item: T) -> K,
     ) -> Query<Grouping<K, T>> {
         var keys: Array<K> = [];
@@ -187,7 +187,7 @@ pub type Query<T>(
     // Pairs each element with the element at the same index in `other`, stopping
     // at the shorter length, and combines them with `combine`.
     pub fn zip<U, R>(
-        self: Self,
+        self: Self<T>,
         other: Query<U>,
         combine: fn(a: T, b: U) -> R,
     ) -> Query<R> {
@@ -211,15 +211,15 @@ pub type Query<T>(
     }
 
     // ── F4: aggregation / element / quantifiers (terminals) ───────────────────
-    pub fn countWhere(self: Self, pred: fn(item: T) -> bool) -> i32 {
+    pub fn countWhere(self: Self<T>, pred: fn(item: T) -> bool) -> i32 {
         return self.items.filter(pred).length;
     }
 
-    pub fn sum(self: Self, selector: fn(item: T) -> i32) -> i32 {
+    pub fn sum(self: Self<T>, selector: fn(item: T) -> i32) -> i32 {
         return self.items.fold(0, { acc, x -> acc + selector(x) });
     }
 
-    pub fn average(self: Self, selector: fn(item: T) -> f64) -> f64 {
+    pub fn average(self: Self<T>, selector: fn(item: T) -> f64) -> f64 {
         var total = 0.0;
         var n = 0.0;
         self.items.forEach({ x ->
@@ -230,7 +230,7 @@ pub type Query<T>(
         return total / n;
     }
 
-    pub fn min<K>(self: Self, keyFn: fn(item: T) -> K) -> ?K {
+    pub fn min<K>(self: Self<T>, keyFn: fn(item: T) -> K) -> ?K {
         val keys = self.items.map(keyFn);
         var best = keys.at(0);
         keys.forEach({ k ->
@@ -242,7 +242,7 @@ pub type Query<T>(
         return best;
     }
 
-    pub fn max<K>(self: Self, keyFn: fn(item: T) -> K) -> ?K {
+    pub fn max<K>(self: Self<T>, keyFn: fn(item: T) -> K) -> ?K {
         val keys = self.items.map(keyFn);
         var best = keys.at(0);
         keys.forEach({ k ->
@@ -255,47 +255,47 @@ pub type Query<T>(
     }
 
     pub fn aggregate<A>(
-        self: Self,
+        self: Self<T>,
         seed: A,
         step: fn(acc: A, item: T) -> A,
     ) -> A {
         return self.items.fold(seed, step);
     }
 
-    pub fn first(self: Self) -> ?T {
+    pub fn first(self: Self<T>) -> ?T {
         return self.items.at(0);
     }
 
-    pub fn firstWhere(self: Self, pred: fn(item: T) -> bool) -> ?T {
+    pub fn firstWhere(self: Self<T>, pred: fn(item: T) -> bool) -> ?T {
         return self.items.filter(pred).at(0);
     }
 
-    pub fn last(self: Self) -> ?T {
+    pub fn last(self: Self<T>) -> ?T {
         return self.items.at(self.items.length - 1);
     }
 
-    pub fn single(self: Self) -> ?T {
+    pub fn single(self: Self<T>) -> ?T {
         if (self.items.length == 1) return self.items.at(0);
         return self.items.at(self.items.length); // absent unless exactly one
     }
 
-    pub fn elementAt(self: Self, index: i32) -> ?T {
+    pub fn elementAt(self: Self<T>, index: i32) -> ?T {
         return self.items.at(index);
     }
 
-    pub fn any(self: Self) -> bool {
+    pub fn any(self: Self<T>) -> bool {
         return self.items.length != 0;
     }
 
-    pub fn anyWhere(self: Self, pred: fn(item: T) -> bool) -> bool {
+    pub fn anyWhere(self: Self<T>, pred: fn(item: T) -> bool) -> bool {
         return self.items.filter(pred).length != 0;
     }
 
-    pub fn all(self: Self, pred: fn(item: T) -> bool) -> bool {
+    pub fn all(self: Self<T>, pred: fn(item: T) -> bool) -> bool {
         return self.items.filter(pred).length == self.items.length;
     }
 
-    pub fn contains(self: Self, x: T) -> bool {
+    pub fn contains(self: Self<T>, x: T) -> bool {
         return self.items.indexOf(x) != -1;
     }
 }
@@ -305,11 +305,11 @@ pub type Grouping<K, V>(
     key: K,
     items: Array<V>,
 ) {
-    pub fn count(self: Self) -> i32 {
+    pub fn count(self: Self<K, V>) -> i32 {
         return self.items.length;
     }
 
-    pub fn toArray(self: Self) -> Array<V> {
+    pub fn toArray(self: Self<K, V>) -> Array<V> {
         return self.items;
     }
 }
