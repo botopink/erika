@@ -26,7 +26,8 @@ and cannot name a function, so the wrapper is spelled `of`.
 
 `repository/erika/botopink.json` is a **workspace** (`"workspaces": ["modules/*", "examples/*"]`,
 decision 75 of 1.0.10-beta): it compiles nothing and ships nothing. The library is the member
-[`modules/erika/`](modules/erika/) — `from "erika"` resolves to it — beside the runnable example
+[`modules/erika/`](modules/erika/) — `from "erika"` resolves to it — beside the test-helper member
+[`modules/erika-test/`](modules/erika-test/) (empty until a front fills it) and the runnable example
 [`examples/erika-linq/`](examples/erika-linq/), which depends on the core with
 `{ "erika": { "workspace": true } }`. `botopink test` runs inside a member, never at the root.
 

@@ -1,0 +1,16 @@
+//// The `erika-test` package — module-tree root.
+////
+//// The test-helper member every library carries (front 95,
+//// `specs/1.0.10-beta/02-packaging/README.md` § 5): `assert<Subject>(loc, …)
+//// -> @Result<void, string>` snapshot helpers, fixtures and builders that know
+//// erika's types, standing on std's asserts and snapshots. Created empty by
+//// front 95; the helpers are added by the front that first needs one. A
+//// consumer adds `"erika-test"` to its dependencies; it never reaches into the
+//// core's own tests. Nothing from std is re-exported, and mocking is std's
+//// (decision 71).
+
+import {of} from "erika";
+
+test "erika-test: the core member resolves from the test member" {
+    assert of([1, 2, 3]).count() == 3;
+}

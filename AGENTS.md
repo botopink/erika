@@ -25,7 +25,7 @@ loader, so erika graduated to its own package: it is reached **only** through
 The repository is a **workspace** (decision 75 of 1.0.10-beta): the root `botopink.json` declares
 members and is never a package — no `src`, `files`, `entry` or `dependencies`, and `botopink
 build/check/run/test` there is the located refusal `botopink.json is a workspace, not a package —
-run this command inside one of its members: erika, erika-linq`. Every `modules/*/` and
+run this command inside one of its members: erika, erika-test, erika-linq`. Every `modules/*/` and
 `examples/*/` holding a `botopink.json` is a member, named by its own manifest. The **core is the
 member `modules/erika/`**; `from "erika"` resolves to it, never to the umbrella.
 
@@ -40,15 +40,20 @@ erika/
 │                        commonJS and erlang, and `botopink test` has no beam backend).
 │                        Nothing is importable from it.
 ├── modules/
-│   └── erika/         ← THE CORE — what `from "erika"` gives a consumer
-│       ├── botopink.json  name erika · src src/ · entry root.bp · target commonJS ·
-│       │                    files ["root.bp", "erika.bp"] · no dependencies
-│       └── src/
-│           ├── root.bp    ← module-tree root: `pub default mod erika;` (public +
-│           │                DEFAULT surface — the `import erika` handle)
-│           └── erika.bp   ← the whole lib: `type Query<T>` + `Grouping<K,V>` +
-│                            constructors + the `pub default fn erika` template fn
-│                            (lexer + parser + dual lowering) + in-file tests
+│   ├── erika/         ← THE CORE — what `from "erika"` gives a consumer
+│   │   ├── botopink.json  name erika · src src/ · entry root.bp · target commonJS ·
+│   │   │                    files ["root.bp", "erika.bp"] · no dependencies
+│   │   └── src/
+│   │       ├── root.bp    ← module-tree root: `pub default mod erika;` (public +
+│   │       │                DEFAULT surface — the `import erika` handle)
+│   │       └── erika.bp   ← the whole lib: `type Query<T>` + `Grouping<K,V>` +
+│   │                        constructors + the `pub default fn erika` template fn
+│   │                        (lexer + parser + dual lowering) + in-file tests
+│   └── erika-test/    ← the `<lib>-test` member (front 95): `assert<Subject>(loc, …)`
+│       │                helpers, fixtures, builders — EMPTY `pub` surface for now
+│       ├── botopink.json  name erika-test · files ["root.bp"] ·
+│       │                    dependencies { erika: { workspace: true } }
+│       └── src/root.bp    ← one inline `test` proving the core resolves from the member
 ├── examples/
 │   └── erika-linq/    ← member `erika-linq` (an application: entry main.bp, target
 │                        commonJS, targets ["commonJS"], depends on the core with
@@ -57,8 +62,9 @@ erika/
                          `modules/*` member, `botopink build` per example
 ```
 
-There is no `modules/erika-test/` yet: the `<lib>-test` member of `02-packaging` § 5 waits on
-`01-std`'s `std/testing/asserts` and `std/testing/snapshots` (front 02 step 4).
+`modules/erika-test/` is the `<lib>-test` member of `02-packaging` § 5, created empty by
+front 95 (1/1 on both rows): it stands on std's `asserts` and `snapshots`, re-exports nothing
+from std, and gains its first `assert<Subject>(loc, …)` with the front that needs one.
 
 ## Module tree (`root.bp`) + the package handle
 
