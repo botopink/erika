@@ -56,8 +56,8 @@ erika/
 │       └── src/root.bp    ← one inline `test` proving the core resolves from the member
 ├── examples/
 │   └── erika-linq/    ← member `erika-linq` (an application: entry main.bp, target
-│                        commonJS, targets ["commonJS"], depends on the core with
-│                        { "erika": { "workspace": true } })
+│                        commonJS, no `targets` — 9/9 on commonJS and erlang — depends
+│                        on the core with { "erika": { "workspace": true } })
 └── scripts/git-hooks/ ← the pre-commit gate (§ Local gate): staged-file guards (no
                          `*.snap.new` / `*.snap.md.new`, no conflict marker), `botopink
                          test` per `modules/*` member, `botopink build` per example; a
@@ -317,11 +317,11 @@ for them.
   `groupBy` bucket is read (`odds.toArray()`) — so a divergence of this shape is worth
   measuring on both targets before it is read as erika's.
 
-  The example's `targets` still reads `["commonJS"]`, and botopink-lang's
-  `scripts/restricted-targets.txt` measures that restriction at **0** (`erika-linq erlang 0`):
-  the restriction has outlived its reason. Lifting it is two edits that land together — drop
-  `"targets"` from `examples/erika-linq/botopink.json` and delete the ledger line — because the
-  runner refuses a stale ledger line.
+  The example's `"targets": ["commonJS"]` narrowing is gone (1.0.11-beta 00-gate, gate-a: a
+  restriction with no host reason is deleted; measured 9/9 on erlang before and after). Until
+  botopink-lang's `scripts/restricted-targets.txt` is deleted (`00-gate/113`), its
+  `erika-linq erlang 0` line is stale and `zig build test-libs` reports it so — expected; the
+  library's own gate is `botopink test` per member.
 
 - **`erika "…"` resolves only `val` collections, not `var`.** The template reads
   the caller's *comptime* scope snapshot, which captures immutable `val` bindings

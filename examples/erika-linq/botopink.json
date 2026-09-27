@@ -5,7 +5,6 @@
   "src": "src/",
   "entry": "main.bp",
   "target": "commonJS",
-  "targets": ["commonJS"],
   "dependencies": {
     "erika": {
       "workspace": true
