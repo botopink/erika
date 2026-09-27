@@ -1,2 +1,9 @@
 .botopinkbuild/
 out/
+
+# a snapshot candidate is recorded by renaming it, never committed
+*.snap.new
+*.snap.md.new
+
+# the task plan of a worktree — never committed
+todo.md

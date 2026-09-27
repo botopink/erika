@@ -1,16 +1,28 @@
 # Per-platform CI for erika.
 #
-# Bootstrap path: check out this lib + botopink-lang, place this lib under
-# `botopink-lang/repository/erika/` so the multi-root resolver finds it
-# without extra config, then run `zig build test-libs -- --lib erika
-# --target <matrix.target>`.
+# The matrix is the manifests' target set (1.0.11-beta 00-gate, gate-j): the
+# workspace `botopink.json` declares no `targets` and no member narrows one,
+# so every member runs on the two targets `botopink test` can run — the rows
+# are `commonJS` and `erlang` on linux and macos, plus `commonJS` on windows
+# (`escript` ships cleanly only on linux + macos). No `beam` row: `botopink
+# test` cannot run beam, so such a row printed `skipped` and passed — a row
+# that measures nothing is not a row. Every row is hard — no `allow_fail`,
+# no `continue-on-error`.
 #
-# `repository/erika/` is a workspace (decision 75): the `repository/` root
-# contributes its members by manifest name, so `--lib erika` selects the
-# member `modules/erika/` and the umbrella has no row.
+# Bootstrap: check out this lib + botopink-lang, place this lib under
+# `botopink-lang/repository/erika/`, build the compiler, run
+# `botopink-lib-test --target <matrix.target>` from the botopink-lang checkout.
+# The runner discovers every project the checkout holds — this workspace's
+# members (`modules/*`, `examples/*`, one row each by manifest name; the
+# umbrella has no row, decision 75) and the compiler's own `libs/std` — and
+# runs `botopink test` in each on the row's target. `--lib` takes one name
+# (`--lib erika` selects the core member only), so the whole workspace is one
+# call without it: no hand-written member loop, and `std` rides along because
+# the runner has no workspace selector.
 #
-# `BOTOPINK_LANG_REF` (repo variable, default `feat`) lets the lib pin a
-# specific botopink-lang SHA during a compiler-version dance.
+# Then the examples gate (runExamplesGate, the pre-commit hook's stage) builds
+# every `examples/*/` with its own manifest target, on every row, and the
+# refusals gate checks every `refusals/*/` case — the hook's stages, in CI.
 name: test
 
 on:
@@ -33,22 +45,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The `erlang` axis is a hard cell: `botopink test --target erlang`
-        # passes the whole suite (31/31, measured 2026-09-17), so the old
-        # `allow_fail: true` (the v0.beta.20 sibling-lib erlang codegen reds)
-        # is gone. windows-2022 commonJS now runs the source step under
-        # `shell: bash` (ci-tail W1), closing the PowerShell `${LIB_NAME}`
-        # expansion gap; the row carries `allow_fail: false`.
         include:
-          - { runner: ubuntu-22.04, target: commonJS, allow_fail: false }
-          - { runner: ubuntu-22.04, target: erlang,   allow_fail: false }
-          - { runner: ubuntu-22.04, target: beam,     allow_fail: false }
-          - { runner: macos-14,     target: commonJS, allow_fail: false }
-          - { runner: macos-14,     target: erlang,   allow_fail: false }
-          - { runner: macos-14,     target: beam,     allow_fail: false }
-          - { runner: windows-2022, target: commonJS, allow_fail: false }
+          - { runner: ubuntu-22.04, target: commonJS }
+          - { runner: ubuntu-22.04, target: erlang }
+          - { runner: macos-14,     target: commonJS }
+          - { runner: macos-14,     target: erlang }
+          - { runner: windows-2022, target: commonJS }
     runs-on: ${{ matrix.runner }}
-    continue-on-error: ${{ matrix.allow_fail }}
     steps:
       - name: Checkout this lib
         uses: actions/checkout@v5
@@ -59,10 +62,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: ${{ env.BOTOPINK_LANG_REPO }}
-          # Default to `feat`: erika consumes bleeding-edge compiler features
-          # (`${expr}` interpolation in `erika "…"` templates landed via §G1
-          # on `feat`; `main` lags). Override via the `BOTOPINK_LANG_REF`
-          # repo variable once `main` catches up.
           ref: ${{ vars.BOTOPINK_LANG_REF || 'feat' }}
           path: botopink-lang
 
@@ -70,8 +69,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p botopink-lang/repository
-          # rsync may not be available on the windows runner — fall back to
-          # cp -R; both produce a real tree (no symlink follow-through quirks).
           if command -v rsync >/dev/null 2>&1; then
             rsync -a --delete self/ "botopink-lang/repository/${LIB_NAME}/"
           else
@@ -79,16 +76,15 @@ jobs:
             cp -R self "botopink-lang/repository/${LIB_NAME}"
           fi
 
-      - name: Install required runtimes (linux)
-        if: matrix.runner == 'ubuntu-22.04' && (matrix.target == 'erlang' || matrix.target == 'beam')
+      - name: Install erlang (linux)
+        if: matrix.runner == 'ubuntu-22.04' && matrix.target == 'erlang'
         run: |
           sudo apt-get update -y
           sudo apt-get install -y erlang
 
-      - name: Install required runtimes (macos)
-        if: matrix.runner == 'macos-14' && (matrix.target == 'erlang' || matrix.target == 'beam')
-        run: |
-          brew install erlang
+      - name: Install erlang (macos)
+        if: matrix.runner == 'macos-14' && matrix.target == 'erlang'
+        run: brew install erlang
 
       - name: Install Node 20 (for commonJS target)
         if: matrix.target == 'commonJS'
@@ -118,41 +114,33 @@ jobs:
         with:
           version: 0.16.0
 
-      - name: Print build identity
-        shell: bash
-        run: |
-          echo "lib:     ${LIB_NAME}"
-          echo "target:  ${{ matrix.target }}"
-          echo "runner:  ${{ matrix.runner }}"
-          echo "fastpath: ${{ vars.BOTOPINK_USE_RELEASE_FASTPATH }}"
-          echo "ref:     ${{ vars.BOTOPINK_LANG_REF || 'feat' }}"
-
       - name: zig build install (source build path)
         if: ${{ vars.BOTOPINK_USE_RELEASE_FASTPATH != 'true' }}
         working-directory: botopink-lang
         run: zig build install
 
-      - name: zig build test-libs --lib ${{ env.LIB_NAME }} --target ${{ matrix.target }} (source)
+      # Every member and every example of the workspace, one row each, on this
+      # row's target (the runner reads each manifest's `targets`).
+      - name: botopink-lib-test --target ${{ matrix.target }} (source)
         if: ${{ vars.BOTOPINK_USE_RELEASE_FASTPATH != 'true' }}
         working-directory: botopink-lang
         shell: bash
-        run: zig build test-libs -- --lib "${LIB_NAME}" --target "${{ matrix.target }}"
+        run: zig-out/bin/botopink-lib-test --bin zig-out/bin/botopink --target "${{ matrix.target }}"
 
-      - name: botopink-lib-test --lib ${{ env.LIB_NAME }} --target ${{ matrix.target }} (fast path)
+      - name: botopink-lib-test --target ${{ matrix.target }} (fast path)
         if: ${{ vars.BOTOPINK_USE_RELEASE_FASTPATH == 'true' }}
         working-directory: botopink-lang
         shell: bash
-        run: botopink-lib-test --lib "${LIB_NAME}" --target "${{ matrix.target }}"
+        run: botopink-lib-test --target "${{ matrix.target }}"
 
-      # Every examples/*/ with a botopink.json builds (runExamplesGate, the same
-      # stage as the pre-commit hook); scripts/known-broken-examples.txt lists
-      # the ones allowed to fail. Each example uses its own manifest target, so
-      # this runs once, not per target.
-      - name: Examples build
-        if: matrix.target == 'commonJS'
+      # Every examples/*/ with a botopink.json builds (runExamplesGate) and
+      # every refusals/*/ case is refused (runRefusalsGate) — the pre-commit
+      # hook's stages, on every row: no row is "the one that checks examples".
+      - name: Examples build and refusals
         working-directory: botopink-lang/repository/${{ env.LIB_NAME }}
         shell: bash
         run: |
           source scripts/git-hooks/lib/runner-standalone.sh
-          bin=$(locateBotopink) || { echo "botopink binary not found"; exit 1; }
+          bin=$(requireBotopink)
           runExamplesGate "$bin"
+          runRefusalsGate "$bin"

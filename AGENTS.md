@@ -58,8 +58,10 @@ erika/
 │   └── erika-linq/    ← member `erika-linq` (an application: entry main.bp, target
 │                        commonJS, targets ["commonJS"], depends on the core with
 │                        { "erika": { "workspace": true } })
-└── scripts/git-hooks/ ← the pre-commit gate (§ Local gate): `botopink test` per
-                         `modules/*` member, `botopink build` per example
+└── scripts/git-hooks/ ← the pre-commit gate (§ Local gate): staged-file guards (no
+                         `*.snap.new` / `*.snap.md.new`, no conflict marker), `botopink
+                         test` per `modules/*` member, `botopink build` per example; a
+                         missing compiler refuses the commit
 ```
 
 `modules/erika-test/` is the `<lib>-test` member of `02-packaging` § 5, created empty by
@@ -348,7 +350,7 @@ Two workflows under `.github/workflows/`:
 
 | Workflow      | Trigger                  | What                                                                |
 | ------------- | ------------------------ | ------------------------------------------------------------------- |
-| `test.yml`    | push / PR (feat/master/main) | Matrix `{ubuntu-22.04, macos-14, windows-2022} × {commonJS, erlang, beam}` (windows = commonJS-only — `escript` ships cleanly only on linux + macos). Bootstrap path: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, then `zig build install && zig build test-libs -- --lib erika --target <t>`. `--lib erika` now names the **member** `modules/erika/` (a root contributes a workspace's members by manifest name), so the umbrella has no row. The `erlang` rows are hard cells (no `allow_fail`; 31/31 on erlang). `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `feat`). |
+| `test.yml`    | push / PR (feat/master/main) | Matrix derived from the manifests (1.0.11-beta 00-gate, gate-j): `{ubuntu-22.04, macos-14} × {commonJS, erlang}` + `windows-2022 × commonJS` (`escript` ships cleanly only on linux + macos). No `beam` row — `botopink test` cannot run beam, so the row printed `skipped` and passed; no `allow_fail` / `continue-on-error` key — every row is hard. Bootstrap path: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, `zig build install`, then `botopink-lib-test --bin zig-out/bin/botopink --target <t>` from the botopink-lang checkout **without `--lib`**: `--lib erika` selects the core member only, so the whole checkout is the run — every member and example of this workspace by manifest name (the umbrella has no row, decision 75) and `libs/std` riding along, since the runner has no workspace selector. Then, on every row, the hook's examples stage (`runExamplesGate`) and refusals stage (`runRefusalsGate`, a no-op until a `refusals/` case exists). `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `feat`). |
 | `tag.yml`    | push to feat/master/main | Reads `version` from `botopink.json`. **feat** → moving `<version>-feat` tag (force-pushed on every push). **master/main** → immutable `<version>` tag (no-op on the same SHA; hard error if the version was not bumped). Uses the built-in `github.token`. |
 
 ## Tagging — "release is a manifest change"
@@ -389,21 +391,29 @@ git config core.hooksPath scripts/git-hooks
 ```
 
 `core.hooksPath` is per clone and applies to every worktree of it. The
-gate checks staged files for conflict markers, then — because the root
-`botopink.json` carries `"workspaces"` — runs one `botopink test` inside
-every `modules/*/` member on its own manifest target (the umbrella
-compiles nothing, so testing it would be the workspace refusal). The
-examples are applications and are built by the next stage.
+gate first refuses a staged snapshot candidate (`*.snap.new` /
+`*.snap.md.new` — written by a mismatch or a missing snapshot and recorded
+by renaming it after it was compared with the spec's literal; both suffixes
+are in `.gitignore`, and the hook catches a `git add -f`) and a staged
+conflict marker, then — because the root `botopink.json` carries
+`"workspaces"` — runs one `botopink test` inside every `modules/*/` member
+on its own manifest target (the umbrella compiles nothing, so testing it
+would be the workspace refusal). The examples are applications and are
+built by the next stage.
 The compiler binary is located via (in order)
 `$BOTOPINK_BIN`, the nearest ancestor
-`repository/botopink-lang/zig-out/bin/botopink`, then `$PATH`. If none
-resolve, the gate prints a yellow warning and exits 0 — CI runs the full
-suite and catches any regression there. Never commit with `--no-verify`;
-fix the red instead.
+`repository/botopink-lang/zig-out/bin/botopink`, then `$PATH`
+(`locateBotopink`). If none resolve, the gate **fails** (`requireBotopink`:
+exit 1, naming `zig build install` and `BOTOPINK_BIN` as the way out) — a
+commit with no `.bp` gate is refused, never skipped (1.0.11-beta 00-gate,
+gate-i: fail beats warn). Never commit with `--no-verify`; fix the red
+instead.
 
 After `botopink test`, the gate builds every `examples/*/` that has a
 `botopink.json` (`runExamplesGate`, each with its own manifest target,
-into a throwaway `--out`); CI runs the same function once per workflow.
+into a throwaway `--out`) and checks every `refusals/*/` case
+(`runRefusalsGate`; this repository has none yet, so the stage is a
+no-op); CI runs both functions on every matrix row.
 The compiler-side twin of this gate is `zig build test-libs -- --lib erika --target <t>` (and
 `--lib erika-linq` for the example's cell), run from `repository/botopink-lang/`. **From a
 `.tasks/<name>/` worktree of the meta repository it refuses**: the runner walks up every
@@ -414,9 +424,8 @@ binary from a directory outside the checkout with the worktree as the only root 
 `botopink-lib-test --bin <worktree>/repository/botopink-lang/zig-out/bin/botopink --lib-root
 <worktree>/repository --lib erika --target <t> --include-unsupported` — the same cell, one root.
 
-`scripts/known-broken-examples.txt` lists the examples allowed to fail —
-`examples/<name>  <reason>` per line — and cannot rot: a listed example
-that builds, or a listed path that no longer exists, fails the gate too.
-When a fix makes an example build, delete its line in the same commit. The list may be absent,
-empty or hold only `#` comments — each means no example is allowed to fail.
-`examples/erika-linq` builds; nothing is listed.
+There is no list of examples allowed to fail: an example that does not build
+fails the gate (gate-i deleted the `known-broken-examples.txt` branch).
+`scripts/git-hooks/lib/runner-standalone.sh` is byte-identical across the
+five library repositories (jhonstart is the reference; `00-gate/113`
+verifies the guard clauses), so a change to it lands in all five.
