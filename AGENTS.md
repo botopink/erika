@@ -417,6 +417,12 @@ none with a flag, variable or list that turns it off:
    commonJS **and** erlang for all three: 6 cells (the umbrella compiles
    nothing, so `botopink test` at the root is the workspace refusal and is
    never called);
+   the cells run side by side on the runner's pool (`gatePool`: one per CPU,
+   bounded by `MemAvailable / 768 MiB`, a cell started only while the runnable
+   threads are at most the CPUs), and the report is printed in plan order once
+   every cell has finished — the lines the one-at-a-time hook printed, cell for
+   cell; stage 5's builds run the same way (1.0.11-beta front 115: emilia's
+   serial hook measured ~4 000 s);
 5. **examples** — `botopink build --target <t>` of every `examples/*/` on every
    declared target, into a throwaway `--out`: 2 builds;
 6. **refusals** — every `refusals/*/` case refused by `botopink check` with the
