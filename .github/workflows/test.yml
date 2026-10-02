@@ -100,7 +100,18 @@ jobs:
 
       - name: Install Erlang/OTP (macos)
         if: runner.os == 'macOS'
-        run: brew install erlang
+        run: |
+          brew install erlang@28 && brew link --force erlang@28
+          echo "$(brew --prefix erlang@28)/bin" >> "$GITHUB_PATH"
+
+      # Decision 227: OTP 28 on every row, linux and macos alike — `erlang@28`
+      # is keg-only, so its `bin` goes on PATH above; any other release here
+      # fails the job rather than testing against it.
+      - name: Assert Erlang/OTP 28
+        shell: bash
+        run: |
+          otp="$(erl -noshell -eval 'io:format("~s",[erlang:system_info(otp_release)]),halt().')"
+          [ "$otp" = 28 ] || { echo "Erlang/OTP is '$otp', not 28 (decision 227)"; exit 1; }
 
       - name: Install Node 20
         uses: actions/setup-node@v5
