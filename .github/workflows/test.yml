@@ -90,28 +90,40 @@ jobs:
       # resident comptime modules are compiled at build time and embedded),
       # and comptime evaluation spawns `erl` whatever the row's target — so
       # a `commonJS` row needs Erlang/OTP exactly as an `erlang` row does.
-      # OTP 28, as botopink-lang's own workflow: the comptime runtime writes
-      # JSON via `json:encode/1` (OTP 27+).
+      # The release is the root botopink.json's "otp" (decision 228): the one
+      # the compiler emits for, which refuses any other `erl` on PATH.
+      - name: Read the Erlang/OTP release (botopink.json "otp")
+        id: otp
+        shell: bash
+        run: |
+          release="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get("otp", ""))' self/botopink.json)"
+          [ -n "$release" ] || { echo "self/botopink.json declares no \"otp\" (decision 228)"; exit 1; }
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
       - name: Install Erlang/OTP (linux)
         if: runner.os == 'Linux'
         uses: erlef/setup-beam@v1
         with:
-          otp-version: '28'
+          otp-version: ${{ steps.otp.outputs.release }}
 
       - name: Install Erlang/OTP (macos)
         if: runner.os == 'macOS'
+        env:
+          OTP: ${{ steps.otp.outputs.release }}
         run: |
-          brew install erlang@28 && brew link --force erlang@28
-          echo "$(brew --prefix erlang@28)/bin" >> "$GITHUB_PATH"
+          brew install "erlang@$OTP" && brew link --force "erlang@$OTP"
+          echo "$(brew --prefix "erlang@$OTP")/bin" >> "$GITHUB_PATH"
 
-      # Decision 227: OTP 28 on every row, linux and macos alike — `erlang@28`
-      # is keg-only, so its `bin` goes on PATH above; any other release here
-      # fails the job rather than testing against it.
-      - name: Assert Erlang/OTP 28
+      # Decisions 227 and 228: the manifest's release on every row, linux and
+      # macos alike — `erlang@<release>` is keg-only, so its `bin` goes on PATH
+      # above; any other release here fails the job rather than testing against it.
+      - name: Assert Erlang/OTP
         shell: bash
+        env:
+          OTP: ${{ steps.otp.outputs.release }}
         run: |
           otp="$(erl -noshell -eval 'io:format("~s",[erlang:system_info(otp_release)]),halt().')"
-          [ "$otp" = 28 ] || { echo "Erlang/OTP is '$otp', not 28 (decision 227)"; exit 1; }
+          [ "$otp" = "$OTP" ] || { echo "Erlang/OTP is '$otp', not $OTP (decisions 227, 228)"; exit 1; }
 
       - name: Install Node 20
         uses: actions/setup-node@v5

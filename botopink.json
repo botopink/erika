@@ -1,6 +1,7 @@
 {
   "name": "erika",
   "version": "0.0.1",
+  "otp": "28",
   "description": "The erika libraries — C#/LINQ-style queries for botopink; a workspace of modules/* and examples/*",
   "workspaces": ["modules/*", "examples/*"]
 }
