@@ -24,6 +24,13 @@
 #                    with the lines of its `expect.txt`, when the repository has
 #                    a `refusals/` directory.
 #
+# Stages 4 and 5 run their cells side by side on a pool sized to the machine
+# (`gatePool`: one per CPU, bounded by memory, a cell admitted while the
+# runnable threads are at most the CPUs) and print their report in plan order
+# once every cell has finished — the same lines, cell for cell, the
+# one-at-a-time gate printed. Front 115 of 1.0.11-beta measured emilia's
+# serial hook at ~4 000 s.
+#
 # Fail beats warn (decision 67; 1.0.11-beta 00-gate, gate-i): nothing here
 # skips. No flag, environment variable or list turns a stage off or names a
 # member, target or example that may fail. A stage is absent only structurally
@@ -216,16 +223,84 @@ runRepositoryStagesGate() {
     return 1
 }
 
+# ── the cell pool ────────────────────────────────────────────────────────────
+# Stages 4 and 5 run their cells side by side: one per CPU, bounded by
+# `MemAvailable / 768 MiB` (a `botopink` child plus its `erl`/`node` peaks at a
+# few hundred MB), and a cell starts only while the machine's runnable threads
+# (`procs_running`, the 4th field of /proc/loadavg) are at most its CPUs —
+# other gates may share the machine. The two cells of one member are safe side
+# by side: `botopink test` writes to its own per-run directory and hands each
+# test its own scratch directory. Every cell writes its log and status to its
+# own files, and the report is printed afterwards in the order the cells were
+# planned, so it is the same text the one-at-a-time gate printed.
+
+gateCpus() {
+    getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || echo 4
+}
+
+# gateJobs — how many cells run at once.
+gateJobs() {
+    local jobs avail_kb by_mem
+    jobs=$(gateCpus)
+    avail_kb=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null || true)
+    if [ -n "$avail_kb" ]; then
+        by_mem=$(( avail_kb / (768 * 1024) ))
+        [ "$by_mem" -ge 1 ] || by_mem=1
+        [ "$by_mem" -lt "$jobs" ] && jobs=$by_mem
+    fi
+    echo "$jobs"
+}
+
+# gateCell <dir> <test|build> <bin> <index> <cwd> <target> — wait for a CPU
+# while another cell of this stage is in flight, then, in <cwd>, `<bin> test
+# --target <target>` or `<bin> build --target <target>` into a throwaway
+# --out; the output goes to <dir>/<index>.log and the status to
+# <dir>/<index>.rc. A cell with no .rc did not run, and is reported red.
+gateCell() {
+    local dir="$1" mode="$2" bin="$3" i="$4" cwd="$5" target="$6" r cpus code out
+    if [ -r /proc/loadavg ]; then
+        cpus=$(gateCpus)
+        while [ -n "$(ls -A "$dir/inflight" 2>/dev/null)" ]; do
+            read -r _ _ _ r _ </proc/loadavg
+            [ "${r%%/*}" -le "$cpus" ] && break
+            sleep 0.2
+        done
+    fi
+    : >"$dir/inflight/$i"
+    code=0
+    case "$mode" in
+        test) ( cd "$cwd" && "$bin" test --target "$target" ) >"$dir/$i.log" 2>&1 </dev/null || code=$? ;;
+        build)
+            out=$(mktemp -d)
+            ( cd "$cwd" && "$bin" build --target "$target" --out "$out" ) >"$dir/$i.log" 2>&1 </dev/null || code=$?
+            rm -rf "$out" ;;
+    esac
+    echo "$code" >"$dir/$i.rc"
+    rm -f "$dir/inflight/$i"
+}
+
+# gatePool <dir> <test|build> <bin> — every cell of <dir>/plan (NUL-separated
+# `<index> <cwd> <target>` triples) through gateCell, the pool's width at a
+# time; returns when every cell has finished.
+gatePool() {
+    local dir="$1" mode="$2" bin="$3"
+    mkdir -p "$dir/inflight"
+    [ -s "$dir/plan" ] || return 0
+    export -f gateCell gateCpus
+    xargs -0 -n 3 -P "$(gateJobs)" "$BASH" -c 'gateCell "$@"' gate-cell "$dir" "$mode" "$bin"         < "$dir/plan" || true
+}
+
 # runTestsGate <botopink-bin> [<target>]
 #
 # Stage 4: `botopink test --target <t>` in every workspace member on every
 # target its manifest declares — or, with `<target>`, on that one target for
 # the members that declare it. A member with no `test` block is still compiled
 # (`botopink test` compiles it and reports `no test blocks found`). Every cell
-# runs; the reds are listed with the tail of their output and the gate fails.
+# runs, on the cell pool; the reds are listed with the tail of their output and
+# the gate fails.
 runTestsGate() {
     local bin="$1" only="${2:-}"
-    local members member rel target log tally cells=0 bad=""
+    local members member rel target log tally dir i cells=0 bad=""
     members=$(workspaceMembers)
     if [ -z "$members" ]; then
         if grep -q '"workspaces"' "$gate_root/botopink.json" 2>/dev/null; then
@@ -235,17 +310,29 @@ runTestsGate() {
         echo "  (no .bp sources under src/ or test/ — nothing to test)"
         return 0
     fi
-    log=$(mktemp)
+    dir=$(mktemp -d)
+    : >"$dir/plan"
+    while IFS= read -r member <&3; do
+        for target in $(manifestTargets "$member/botopink.json"); do
+            [ -z "$only" ] || [ "$target" = "$only" ] || continue
+            cells=$((cells + 1))
+            printf '%s\0%s\0%s\0' "$cells" "$member" "$target" >>"$dir/plan"
+        done
+    done 3<<< "$members"
+    gatePool "$dir" test "$bin"
+    i=0
     while IFS= read -r member <&3; do
         rel="${member#"$gate_root"}"; rel="${rel#/}"; rel="${rel:-.}"
         for target in $(manifestTargets "$member/botopink.json"); do
             [ -z "$only" ] || [ "$target" = "$only" ] || continue
-            cells=$((cells + 1))
+            i=$((i + 1))
+            log="$dir/$i.log"
             echo -n "  Testing $rel · $target (botopink test)... "
-            if ( cd "$member" && "$bin" test --target "$target" ) >"$log" 2>&1 </dev/null; then
+            if [ "$(cat "$dir/$i.rc" 2>/dev/null)" = 0 ]; then
                 tally=$(testTally "$log")
                 echo -e "${GREEN}✓${NC} ${tally}"
             else
+                [ -f "$dir/$i.rc" ] || echo "the cell did not run" >>"$log"
                 tally=$(testTally "$log")
                 echo -e "${RED}✗${NC} ${tally}"
                 stripColours < "$log" | tail -n 30 | sed 's/^/      /'
@@ -253,7 +340,7 @@ runTestsGate() {
             fi
         done
     done 3<<< "$members"
-    rm -f "$log"
+    rm -rf "$dir"
     if [ -n "$bad" ]; then
         echo -e "$bad"
         echo -e "${RED}✗ $(basename "$gate_root"): tests gate failed${NC}"
@@ -267,29 +354,41 @@ runTestsGate() {
 # Stage 5: builds every `examples/*/` that has a `botopink.json` on every
 # target its manifest declares (into a throwaway --out) — or, with `<target>`,
 # on that one target for the examples that declare it (a CI row builds its
-# own). An example that does not build fails the gate; there is no list of
-# examples allowed to fail.
+# own) — on the cell pool. An example that does not build fails the gate;
+# there is no list of examples allowed to fail.
 runExamplesGate() {
     local bin="$1" only="${2:-}"
-    local dir rel out target builds=0 bad=""
-    for dir in "$gate_root"/examples/*/; do
-        [ -f "${dir}botopink.json" ] || continue
-        dir="${dir%/}"
-        rel="examples/$(basename "$dir")"
-        for target in $(manifestTargets "$dir/botopink.json"); do
+    local d rel target dir i builds=0 bad=""
+    dir=$(mktemp -d)
+    : >"$dir/plan"
+    for d in "$gate_root"/examples/*/; do
+        [ -f "${d}botopink.json" ] || continue
+        d="${d%/}"
+        for target in $(manifestTargets "$d/botopink.json"); do
             [ -z "$only" ] || [ "$target" = "$only" ] || continue
             builds=$((builds + 1))
-            out=$(mktemp -d)
+            printf '%s\0%s\0%s\0' "$builds" "$d" "$target" >>"$dir/plan"
+        done
+    done
+    gatePool "$dir" build "$bin"
+    i=0
+    for d in "$gate_root"/examples/*/; do
+        [ -f "${d}botopink.json" ] || continue
+        d="${d%/}"
+        rel="examples/$(basename "$d")"
+        for target in $(manifestTargets "$d/botopink.json"); do
+            [ -z "$only" ] || [ "$target" = "$only" ] || continue
+            i=$((i + 1))
             echo -n "  Building $rel · $target (botopink build)... "
-            if ( cd "$dir" && "$bin" build --target "$target" --out "$out" ) >/dev/null 2>&1 </dev/null; then
+            if [ "$(cat "$dir/$i.rc" 2>/dev/null)" = 0 ]; then
                 echo -e "${GREEN}✓${NC}"
             else
                 echo -e "${RED}✗${NC}"
-                bad="$bad\n  $rel · $target does not build — re-run: ( cd $dir && $bin build --target $target --out \$(mktemp -d) )"
+                bad="$bad\n  $rel · $target does not build — re-run: ( cd $d && $bin build --target $target --out \$(mktemp -d) )"
             fi
-            rm -rf "$out"
         done
     done
+    rm -rf "$dir"
     if [ -n "$bad" ]; then
         echo -e "$bad"
         echo -e "${RED}✗ $(basename "$gate_root"): examples gate failed${NC}"
