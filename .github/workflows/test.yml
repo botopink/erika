@@ -10,10 +10,10 @@
 # a row here would measure the compiler's windows port, not this library; it
 # returns with the compiler's.
 #
-# The linux runner is ubuntu-24.04, not 22.04: botopink-lang's `build.zig` links
-# the compiler against a pinned glibc 2.38 and the binary imports
-# `arc4random_buf` (GLIBC_2.36); ubuntu-22.04 ships glibc 2.35 and cannot start
-# it (`version 'GLIBC_2.36' not found`).
+# The linux runner is ubuntu-24.04: botopink-lang's `build.zig` links the
+# compiler against a pinned glibc 2.35 (decision 219 — ubuntu-22.04's, the
+# oldest the shipped binary supports), so it starts on 22.04 and 24.04 alike;
+# the compiler's own workflow gates the 22.04 floor, this row runs on 24.04.
 #
 # Bootstrap: check out this lib + botopink-lang, place this lib under
 # `botopink-lang/repository/erika/`
