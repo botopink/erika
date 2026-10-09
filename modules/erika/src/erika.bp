@@ -815,9 +815,10 @@ test "erika concat/union/intersect/except" {
 test "erika groupBy partitions by key" {
     val groups = of([1, 2, 3, 4, 5, 6]).groupBy({ n -> n % 2 }).toArray();
     assert groups.length == 2;
-    val odds = of(groups)
-        .firstWhere({ g -> g.key == 1 })
-        .unwrapOr(Grouping(key: -1, items: []));
+    val odds = of(groups).firstWhere({ g -> g.key == 1 }) ?? Grouping(
+        key: -1,
+        items: [],
+    );
     assert odds.count() == 3;
     assert odds.toArray().join(",") == "1,3,5";
 }
@@ -837,21 +838,21 @@ test "erika aggregate folds left like Array.fold" {
 test "erika sum/average/min/max" {
     assert of([1, 2, 3, 4]).sum({ n -> n }) == 10;
     assert of([2.0, 4.0, 6.0]).average({ n -> n }) == 4.0;
-    assert of([3, 1, 2]).min({ n -> n }).unwrapOr(-1) == 1;
-    assert of([3, 1, 2]).max({ n -> n }).unwrapOr(-1) == 3;
+    assert of([3, 1, 2]).min({ n -> n }) ?? -1 == 1;
+    assert of([3, 1, 2]).max({ n -> n }) ?? -1 == 3;
 }
 
 test "erika first/firstWhere/last/single/elementAt return optionals" {
-    assert of([10, 20, 30]).first().unwrapOr(-1) == 10;
-    assert of([10, 20, 30]).firstWhere({ n -> n > 15 }).unwrapOr(-1) == 20;
-    assert of([10, 20, 30]).last().unwrapOr(-1) == 30;
-    assert of([42]).single().unwrapOr(-1) == 42;
-    assert of([1, 2]).single().unwrapOr(-99) == -99;
-    assert of([10, 20, 30]).elementAt(1).unwrapOr(-1) == 20;
+    assert of([10, 20, 30]).first() ?? -1 == 10;
+    assert of([10, 20, 30]).firstWhere({ n -> n > 15 }) ?? -1 == 20;
+    assert of([10, 20, 30]).last() ?? -1 == 30;
+    assert of([42]).single() ?? -1 == 42;
+    assert of([1, 2]).single() ?? -99 == -99;
+    assert of([10, 20, 30]).elementAt(1) ?? -1 == 20;
 }
 
 test "erika first on no match returns absent" {
-    assert of([1, 2, 3]).firstWhere({ n -> n > 9 }).unwrapOr(-1) == -1;
+    assert of([1, 2, 3]).firstWhere({ n -> n > 9 }) ?? -1 == -1;
 }
 
 test "erika any/anyWhere/all/contains quantifiers" {
