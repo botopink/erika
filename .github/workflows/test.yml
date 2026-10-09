@@ -125,10 +125,13 @@ jobs:
           otp="$(erl -noshell -eval 'io:format("~s",[erlang:system_info(otp_release)]),halt().')"
           [ "$otp" = "$OTP" ] || { echo "Erlang/OTP is '$otp', not $OTP (decisions 227, 228)"; exit 1; }
 
-      - name: Install Node 20
+      # Node 22, the floor std's commonJS bodies need: `fs.glob` matches a
+      # segment with `fs.globSync` (Node 22+, botopink-lang's
+      # libs/std/src/io/fs.bp); under Node 20 it throws and the walk answers `[]`.
+      - name: Install Node 22
         uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
 
       # H7 (v0.beta.19) — release fast path. Opt-in via the lib's
       # `BOTOPINK_USE_RELEASE_FASTPATH` repo variable. Set to `true` after
