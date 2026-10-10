@@ -123,9 +123,9 @@ member that is a library and lists no `files` is `✗ ships nothing`.
   functions, and `queryTake`/`queryFirst` for the row count: a method call on a receiver the
   checker has not typed, inside a hole's lambda, is dispatched by name alone on erlang); with
   `group by`, rows are ordered by the key, grouped and turned into an array before the
-  operators run. The built code is padded to start at the literal's own line and column
-  (the `// LANGUAGE GAP` in `erika.bp`: two expansions of one module otherwise share the
-  locations of their built code, `language-gaps.md`). A `join` is
+  operators run. The built code is the pipeline alone: the compiler locates it by its
+  expansion (decision 429), so two queries of one module whose code sits at the same offsets
+  keep their own plans, and a diagnostic in it points at the literal. A `join` is
   `of(a).selectMany({ l -> b.filter({ r -> l.f == r.g }).map({ r -> #(l, r) }) })`, so a row is
   a pair and every field reads `row.0.f` / `row.1.g`.
 - **Lowering ③ → `@Expr<T>` (the executable pipeline).** Walks the `SelectStmt`

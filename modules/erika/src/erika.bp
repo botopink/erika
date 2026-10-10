@@ -1431,20 +1431,7 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
             ref: null,
             children: nodes,
         );
-        // LANGUAGE GAP: Two template expansions in one module share the locations of their built code — a loc-keyed plan of one lands on a call of the other; the code is padded to start at the literal's own line and column.
-        val origin = q.source();
-        var pad = "";
-        var padLine = 1;
-        while (padLine < origin.line) {
-            pad = pad + "\n";
-            padLine = padLine + 1;
-        }
-        var padCol = 1;
-        while (padCol < origin.col) {
-            pad = pad + " ";
-            padCol = padCol + 1;
-        }
-        return q.custom(root, q.build(pad + pipe));
+        return q.custom(root, q.build(pipe));
     }
     // Unknown collection → a diagnostic ranged at the offending name *inside* the
     // string (sublanguage-lsp F2), not at the whole template.
