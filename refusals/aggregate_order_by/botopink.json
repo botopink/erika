@@ -1,0 +1,11 @@
+{
+  "name": "refusal-aggregate-order-by",
+  "version": "0.0.1",
+  "description": "front 137: an aggregate without group by cannot be ordered.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "refusal-unknown-aggregate",
+  "version": "0.0.1",
+  "description": "front 137: an aggregate is one of count, sum, avg, min, max.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}

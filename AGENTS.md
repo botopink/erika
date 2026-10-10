@@ -56,8 +56,12 @@ erika/
 │       └── src/root.bp    ← one inline `test` proving the core resolves from the member
 ├── examples/
 │   └── erika-linq/    ← member `erika-linq` (an application: entry main.bp, target
-│                        commonJS, no `targets` — 9/9 on commonJS and erlang — depends
+│                        commonJS, no `targets` — 14/14 on commonJS and erlang — depends
 │                        on the core with { "erika": { "workspace": true } })
+├── refusals/          ← stage 6 of the gate (front 137): one project per located error of the
+│                        grammar (`botopink check` must refuse it with the lines of its
+│                        `expect.txt`) — holes, `limit`, aggregates, `group by`, `join`; a
+│                        compile error cannot be a `test { }`
 └── scripts/git-hooks/ ← the pre-commit gate (§ Local gate): staged-file guards (no
                          `*.snap.new` / `*.snap.md.new`, no conflict marker), a missing
                          compiler refuses the commit, `botopink test` in every workspace
@@ -66,7 +70,7 @@ erika/
 ```
 
 `modules/erika-test/` is the `<lib>-test` member of `02-packaging` § 5, created empty by
-front 95 (1/1 on both rows): it stands on std's `asserts` and `snapshots`, re-exports nothing
+front 95 (15/15 on both rows since 137: the `QueryContext` of its own and the consumer-side cells of the grammar): it stands on std's `asserts` and `snapshots`, re-exports nothing
 from std, and gains its first `assert<Subject>(loc, …)` with the front that needs one.
 
 ## Module tree (`root.bp`) + the package handle
@@ -103,10 +107,27 @@ member that is a library and lists no `files` is `✗ ships nothing`.
   value; the `where` clause is split into `or`-of-`and`-of-comparison groups so
   the `or < and < comparison` precedence is structural), then ③/④ **dual lowering**
   of the *same* parse. Grammar:
-  `select <* | f1[, f2…]> from <Name> [where <cond>] [order by <field> [asc|desc]]`.
+  `select <* | item[, item…]> from <Name> [join <Name> on <a.f> = <b.g>] [where <cond>] [group by <field>] [order by <field> [asc|desc]] [limit <n | hole>]` (an item is a field or `count(*)`/`sum`/`avg`/`min`/`max`).
   The single-line `erika "…"` and triple-quoted multi-line `erika """ … """` forms
   are equivalent — the lexer treats newlines/tabs as ordinary token boundaries, so
   layout is free (the `html """…"""` sibling).
+- **Holes, rows, aggregates, groups, joins (front 137).** A `${…}` hole stands only as an
+  operand of a comparison or as `limit`'s number (anything else is a located `failAt`). The
+  built code binds every hole once (`bindOnce`/`holeBound`, private to `erika.bp`, resolved in
+  this module by 112) and ties its type to the field, literal or earlier hole it meets with a
+  *witness column* (`src.map({ row -> row.f })`) typed against the source's element type: the
+  checker does not look inside the lambdas given to a `Query` operator, so the tie lives
+  outside the pipeline and the mismatch is reported at the hole's own expression. `limit 1`
+  lowers to `first()` (an optional answer), another `limit n` to `take(n)`. Aggregates without
+  `group by` lower to the terminal of the filtered query (`aggCount`/`aggSum`/… plain
+  functions, and `queryTake`/`queryFirst` for the row count: a method call on a receiver the
+  checker has not typed, inside a hole's lambda, is dispatched by name alone on erlang); with
+  `group by`, rows are ordered by the key, grouped and turned into an array before the
+  operators run. The built code is padded to start at the literal's own line and column
+  (the `// LANGUAGE GAP` in `erika.bp`: two expansions of one module otherwise share the
+  locations of their built code, `language-gaps.md`). A `join` is
+  `of(a).selectMany({ l -> b.filter({ r -> l.f == r.g }).map({ r -> #(l, r) }) })`, so a row is
+  a pair and every field reads `row.0.f` / `row.1.g`.
 - **Lowering ③ → `@Expr<T>` (the executable pipeline).** Walks the `SelectStmt`
   into unqualified fluent source
   (`of(Name).where({row -> …}).orderBy(…).select(…).toArray()`) and splices it via
@@ -163,7 +184,7 @@ open (decision 133).
 
 Every reformat is verified before it is committed, by four measurements: the word-and-literal
 token stream and the comment text of each file are identical before and after; the pass is
-idempotent; the cells stay 31/31 (`modules/erika`), 1/1 (`modules/erika-test`) and 9/9
+idempotent; the cells stay 34/34 (`modules/erika`), 15/15 (`modules/erika-test`) and 14/14
 (`examples/erika-linq`) on commonJS and erlang; and `examples/erika-linq`'s emitted output is
 `diff -r` byte-identical on both targets. Re-run `format` here after every formatter construct
 the compiler lands, and commit the output only when those four hold again. A hunk that loses
@@ -294,6 +315,17 @@ for them.
   [`../botopink-lang/examples/generic-loader-binding/`](../botopink-lang/examples/generic-loader-binding/).
   Still zero core surface here: the binding is generic loader work, not erika-aware.
 
+- **Holes, `limit`, aggregates, `group by`, `join` (front 137, steps 1, 3, 4 in memory)** —
+  **landed.** `erika "… ${expr}"` binds the expression once and ties its type to the
+  field it meets; `limit 1` answers `?T`, `limit n` an array; `count(*)`/`sum`/`avg`/`min`/`max`,
+  `group by` and an inner `join` lower to the fluent pipeline. Cells: `modules/erika` (holes,
+  in-file), `modules/erika-test` (the rest, from a consumer module), `examples/erika-linq`,
+  and `refusals/` (the located errors).
+- **`QueryContext<E>`, `QueryTable`, `QueryColumn` (137 step 2, decision 397 (1))** —
+  **declared** in `erika.bp`; `modules/erika-test` implements `QueryContext` with a context of
+  its own. The SQL target itself (`from User` on a context, `self.db.query "…"`) waits on
+  `01-checker` step 29 and on typed meta being readable in a template body.
+
 ### Recorded gaps
 
 - **`examples/erika-linq` was red on erlang — a botopink-lang defect, not erika's** —
@@ -351,7 +383,7 @@ Two workflows under `.github/workflows/`:
 
 | Workflow      | Trigger                  | What                                                                |
 | ------------- | ------------------------ | ------------------------------------------------------------------- |
-| `test.yml`    | push / PR (feat/master/main) | Rows are the manifests' target set (1.0.11-beta 00-gate, gate-j) on the runners the compiler is gated on: `{ubuntu-24.04, macos-14} × {commonJS, erlang}`, every row hard (no `allow_fail`, no `continue-on-error`). No `beam` row (`botopink test` cannot run beam), no windows row (gate-f: botopink-lang has none; it returns with the compiler's). The linux runner is `ubuntu-24.04`; the compiler links against a pinned glibc 2.35 (decision 219, ubuntu-22.04's), so it starts on either runner — the 22.04 floor is the compiler's own workflow's. Erlang/OTP 28 **and** Node 22 are installed on every row (OTP 28 pinned on both runners — the release the root `botopink.json`'s `"otp"` names (`"28"`), read by a step before the installs (decision 228; the compiler refuses any other `erl` on PATH) — `erlef/setup-beam` on linux, `brew install erlang@<release> && brew link --force erlang@<release>` with its `bin` on `$GITHUB_PATH` on macos (decision 227; Homebrew's plain `erlang` is the latest OTP), and a step after both fails the job unless `erl` reports that release) — `zig build install` runs `erlc` and comptime evaluation spawns `erl` whatever the row's target. Bootstrap: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, `zig build install`, then one `botopink-lib-test --bin "$BOTOPINK_BIN" --target <t> --strict` from a scratch directory with `BOTOPINK_LIB_ROOTS` naming this repository: the runner discovers this workspace's members — `erika`, `erika-test`, `erika-linq`, one row each (the umbrella has no row, decision 75) — and nothing else, so the verdict is this library's (run from inside the checkout it would add `libs/std` and every sibling under `repository/` as rows). Then the hook's other stages from its own runner, on every row: `runRepositoryStagesGate` (no `repository-stages.sh` here), `runExamplesGate "$bin" <t>` and `runRefusalsGate` (no `refusals/` here). `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `feat`). |
+| `test.yml`    | push / PR (feat/master/main) | Rows are the manifests' target set (1.0.11-beta 00-gate, gate-j) on the runners the compiler is gated on: `{ubuntu-24.04, macos-14} × {commonJS, erlang}`, every row hard (no `allow_fail`, no `continue-on-error`). No `beam` row (`botopink test` cannot run beam), no windows row (gate-f: botopink-lang has none; it returns with the compiler's). The linux runner is `ubuntu-24.04`; the compiler links against a pinned glibc 2.35 (decision 219, ubuntu-22.04's), so it starts on either runner — the 22.04 floor is the compiler's own workflow's. Erlang/OTP 28 **and** Node 22 are installed on every row (OTP 28 pinned on both runners — the release the root `botopink.json`'s `"otp"` names (`"28"`), read by a step before the installs (decision 228; the compiler refuses any other `erl` on PATH) — `erlef/setup-beam` on linux, `brew install erlang@<release> && brew link --force erlang@<release>` with its `bin` on `$GITHUB_PATH` on macos (decision 227; Homebrew's plain `erlang` is the latest OTP), and a step after both fails the job unless `erl` reports that release) — `zig build install` runs `erlc` and comptime evaluation spawns `erl` whatever the row's target. Bootstrap: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, `zig build install`, then one `botopink-lib-test --bin "$BOTOPINK_BIN" --target <t> --strict` from a scratch directory with `BOTOPINK_LIB_ROOTS` naming this repository: the runner discovers this workspace's members — `erika`, `erika-test`, `erika-linq`, one row each (the umbrella has no row, decision 75) — and nothing else, so the verdict is this library's (run from inside the checkout it would add `libs/std` and every sibling under `repository/` as rows). Then the hook's other stages from its own runner, on every row: `runRepositoryStagesGate` (no `repository-stages.sh` here), `runExamplesGate "$bin" <t>` and `runRefusalsGate`. `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `feat`). |
 | `tag.yml`    | push to feat/master/main | Reads `version` from `botopink.json`. **feat** → moving `<version>-feat` tag (force-pushed on every push). **master/main** → immutable `<version>` tag (no-op on the same SHA; hard error if the version was not bumped). Uses the built-in `github.token`. |
 
 ## Tagging — "release is a manifest change"
@@ -426,13 +458,13 @@ none with a flag, variable or list that turns it off:
 5. **examples** — `botopink build --target <t>` of every `examples/*/` on every
    declared target, into a throwaway `--out`: 2 builds;
 6. **refusals** — every `refusals/*/` case refused by `botopink check` with the
-   lines of its `expect.txt`, when the directory exists. erika has none.
+   lines of its `expect.txt`, when the directory exists (front 137: 20 cases, one per located error of the grammar).
 
 Stages 1–3 stop the gate at the first red. Stages 4–6 all run: every red cell
 is listed with the tail of its output and a re-run line, and the gate fails at
 the end — one run tells every red. Measured 2026-10-01 with the compiler built
-from botopink-lang `29cfffc8`: 6/6 cells (`erika` 31/31, `erika-test` 1/1,
-`erika-linq` 9/9, each on both targets), 2/2 builds, exit 0 in 12 s. Never
+from botopink-lang `29cfffc8`: 6/6 cells (`erika` 34/34, `erika-test` 15/15,
+`erika-linq` 14/14, each on both targets; 137), 2/2 builds, 20 refusal cases (`refusals/`), exit 0 in 12 s (measured before 137). Never
 commit with `--no-verify`; fix the red instead.
 
 The compiler-side twin of this gate is `zig build test-libs -- --lib erika --target <t>` (and

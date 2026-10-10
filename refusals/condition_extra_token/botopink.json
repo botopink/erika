@@ -1,0 +1,11 @@
+{
+  "name": "refusal-condition-extra-token",
+  "version": "0.0.1",
+  "description": "front 137: a condition is a comparison.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}

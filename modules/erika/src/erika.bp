@@ -314,6 +314,38 @@ pub type Grouping<K, V>(
     }
 }
 
+// ── the database target: what a persistence library implements and records ───
+//
+// erika names no library (113): the SQL target speaks to a `QueryContext`, which
+// a persistence library implements (dbcontext's `DbContext`, 398), and reads the
+// `QueryTable` meta that library records on an entity (`#[entity]`, 397 (1), the
+// pattern of 383: the lower layer declares the meta).
+
+/// One column of an entity: the field it maps from and the column it names.
+pub type QueryColumn(
+    field: string,
+    column: string,
+)
+
+/// The table an entity maps to and its columns — the typed meta (298) a
+/// persistence library records on an entity, `@typeInfo(User).meta(QueryTable)`.
+pub type QueryTable(
+    name: string,
+    columns: Array<QueryColumn>,
+)
+
+/// Where a statement runs. `run` sends `sql` with `params` bound positionally
+/// (`$1…$n`, in the order the query's holes are written, each as text) and
+/// answers the rows decoded as `T`; `E` is the implementor's own error, so erika
+/// names no library's.
+pub behavior QueryContext<E> {
+    fn run<T>(
+        self: Self<E>,
+        sql: string,
+        params: Array<string>,
+    ) -> @Result<Array<T>, E>;
+}
+
 // ── constructors ──────────────────────────────────────────────────────────────
 
 pub fn of<T>(xs: Array<T>) -> Query<T> {
@@ -340,6 +372,70 @@ fn repeatInto<T>(acc: Array<T>, value: T, n: i32) -> Array<T> {
 
 pub fn repeat<T>(value: T, times: i32) -> Query<T> {
     return Query(items: repeatInto([], value, times));
+}
+
+// ── holes: a `${…}` operand is a bound value, typed against what it meets ────
+//
+// The template cannot see a hole's type (its body is untyped) and the checker
+// does not look inside the lambdas handed to a `Query` operator, so the lowering
+// ties every hole to what it is compared with OUTSIDE the pipeline: `holeTie`
+// shares one `F` between a hole and the column it meets (`src.map({ row ->
+// row.age })` is checked against the source's element type, so a field the type
+// lacks and a hole of another type are the ordinary type errors), `holeSame` between a hole and a
+// literal or another hole. the ties are `val`s ahead of the pipeline, and
+// `bindOnce` binds a hole's expression to a name, so it is evaluated once, not
+// once per row. They are private: the code `q.build` writes resolves in this
+// module (112).
+
+fn holeTie<F>(column: Array<F>, value: F) -> bool {
+    return true;
+}
+
+fn holeSame<T>(a: T, b: T) -> bool {
+    return true;
+}
+
+fn holeBound<F, R>(column: Array<F>, value: F, body: fn(held: F) -> R) -> R {
+    return body(value);
+}
+
+// The aggregates of a query or of a group, as plain functions: a method call
+// on a receiver whose type the checker has not fixed (inside the lambda of
+// `bindOnce` / `holeBound`) is dispatched by name alone on erlang.
+fn aggCount<T>(rows: Query<T>) -> i32 {
+    return rows.count();
+}
+
+fn aggSum<T>(rows: Query<T>, field: fn(item: T) -> i32) -> i32 {
+    return rows.sum(field);
+}
+
+fn aggAvg<T>(rows: Query<T>, field: fn(item: T) -> f64) -> f64 {
+    return rows.average(field);
+}
+
+fn aggMin<T, K>(rows: Query<T>, field: fn(item: T) -> K) -> ?K {
+    return rows.min(field);
+}
+
+fn aggMax<T, K>(rows: Query<T>, field: fn(item: T) -> K) -> ?K {
+    return rows.max(field);
+}
+
+fn queryTake<T>(rows: Query<T>, n: i32) -> Query<T> {
+    return rows.take(n);
+}
+
+fn queryFirst<T>(rows: Query<T>) -> ?T {
+    return rows.first();
+}
+
+fn groupRows<K, V>(group: Grouping<K, V>) -> Query<V> {
+    return Query(items: group.items);
+}
+
+fn bindOnce<H, R>(value: H, body: fn(held: H) -> R) -> R {
+    return body(value);
 }
 
 // ── F5: the `erika "…"` query-string template fn ──────────────────────────────
@@ -396,9 +492,13 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     // operandCode detects the placeholder prefix and emits it verbatim so
     // `infer.substituteHoles` swaps in the caller's expression after build().
     var sql = "";
+    var holes: Array<string> = [];
     for (q.parts()) { p ->
         if (p.kind == "Text") sql = sql + p.text;
-        if (p.kind == "Interp") sql = sql + p.code;
+        if (p.kind == "Interp") {
+            sql = sql + p.code;
+            holes = holes.append([p.code]);
+        }
     }
     val sqlLen = sql.split("").length;
     // Trailing space forces the final token to flush at the end of the scan
@@ -428,34 +528,7 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
             txt.slice(0, 10) == "__bp_hole_";
         out;
     };
-    val operandCode = { knd, txt ->
-        val isHole = isHolePlaceholder(txt);
-        val out = if (isHole)
-            txt
-        else if (knd == "string")
-            "\"" + txt.split("'").join("") + "\""
-        else if (knd == "number")
-            txt
-        else
-            "row." + txt;
-        out;
-    };
-    val opCode = { opText ->
-        val out = if (opText == "=")
-            "=="
-        else if (opText == "<>")
-            "!="
-        else
-            opText;
-        out;
-    };
-    val cmpCode = { cmp ->
-        val lc = operandCode(cmp.0, cmp.1);
-        val rc = operandCode(cmp.4, cmp.5);
-        val oc = opCode(cmp.2);
-        val out = if (cmp.6) lc + " " + oc + " " + rc else lc;
-        out;
-    };
+
     // A comparison group's tokens → a flat comparison tuple (`left [op right]`).
     // Positional extraction counts the items in a `var` (the loop folds
     // `lTok`/`opTok`/`rTok` out); a dangling operator (2 tokens) is a `failAt` at
@@ -472,14 +545,36 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
             idx = idx + 1;
         }
         val cnt = cmpToks.length;
+        if (cnt == 1)
+            if (isHolePlaceholder(lTok.1))
+                q.failAt(
+                    lTok.2,
+                    "erika: a hole is a bound value to compare, not a condition; write `field = <hole>`",
+                );
+        if (cnt > 3)
+            q.failAt(
+                cmpToks.at(3).2,
+                "erika: unexpected '" + cmpToks.at(3).1 + "' in the condition",
+            );
         if (cnt == 2)
             q.failAt(
                 opTok.2,
                 "erika: condition needs a value after '" + opTok.1 + "'",
             );
-        val mkCmp = { lKind, lText, opText, opSpan, rKind, rText, hasOp -> #(lKind, lText, opText, opSpan, rKind, rText, hasOp) };
-        mkCmp(lTok.0, lTok.1, opTok.1, opTok.2, rTok.0, rTok.1, cnt >= 3);
+        val mkCmp = { lKind, lText, opText, opSpan, rKind, rText, hasOp, lSpan, rSpan -> #(lKind, lText, opText, opSpan, rKind, rText, hasOp, lSpan, rSpan) };
+        mkCmp(
+            lTok.0,
+            lTok.1,
+            opTok.1,
+            opTok.2,
+            rTok.0,
+            rTok.1,
+            cnt >= 3,
+            lTok.2,
+            rTok.2,
+        );
     };
+
 
     // ── ① lexer: chars → Token[] with real spans ──────────────────────────────
     // `for (chars) { ch -> }` binds the char; `pos` counts its byte offset. Every token is
@@ -541,7 +636,11 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
                     || cur == "asc"
                     || cur == "desc"
                     || cur == "and"
-                    || cur == "or";
+                    || cur == "or"
+                    || cur == "join"
+                    || cur == "on"
+                    || cur == "group"
+                    || cur == "limit";
                 val isWordKind = curKind == "word";
                 val wordFinal = if (isDigit0)
                     "number"
@@ -571,46 +670,182 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
         }
     }
 
+
     // ── ② parser: bucket tokens into the SelectStmt pieces ────────────────────
-    var star = false;
-    var fields: Array<#(string, Span)> = [];
+    // A hole is a bound value: it may stand only as the operand of a comparison
+    // (`where`) or as the number of rows (`limit`) — never as a field, a table,
+    // a keyword or a piece of a string.
+    var headToks: Array<#(string, string, Span)> = [];
     var srcName = "";
     var srcSpan = Span(0, 0, 1);
+    var joinName = "";
+    var joinSpan = Span(0, 0, 1);
+    var onToks: Array<#(string, string, Span)> = [];
     var whereToks: Array<#(string, string, Span)> = [];
+    var groupName = "";
+    var groupSpan = Span(0, 0, 1);
     var orderToks: Array<#(string, string, Span)> = [];
+    var limitToks: Array<#(string, string, Span)> = [];
     var section = "head";
     for (toks) { t ->
         val tk = t.0;
         val tx = t.1;
         val isFrom = tk == "keyword" && tx == "from";
+        val isJoin = tk == "keyword" && tx == "join";
+        val isOn = tk == "keyword" && tx == "on";
         val isWhere = tk == "keyword" && tx == "where";
+        val isGroup = tk == "keyword" && tx == "group";
         val isOrder = tk == "keyword" && tx == "order";
         val isBy = tk == "keyword" && tx == "by";
-        val isStructural = isFrom || isWhere || isOrder || isBy;
+        val isLimit = tk == "keyword" && tx == "limit";
+        val isStructural = isFrom
+            || isJoin
+            || isOn
+            || isWhere
+            || isGroup
+            || isOrder
+            || isBy
+            || isLimit;
         if (isFrom) section = "afterFrom";
+        if (isJoin) section = "join";
+        if (isOn) section = "on";
         if (isWhere) section = "where";
+        if (isGroup) section = "group";
         if (isOrder) section = "order";
+        if (isLimit) section = "limit";
+        val isHoleTok = isHolePlaceholder(tx);
+        val holeInStr = tk == "string" && tx.contains("__bp_hole_");
+        if (holeInStr)
+            q.failAt(
+                t.2,
+                "erika: a hole is a bound value, never text: it cannot stand inside a string literal",
+            );
+        val holeOk = section == "where" || section == "limit";
+        if (isHoleTok)
+            if (!holeOk)
+                q.failAt(
+                    t.2,
+                    "erika: a hole is a bound value, never text: it cannot stand for a field or a table, only for the operand of a comparison or the number of rows",
+                );
         if (!isStructural) {
-            if (section == "head") {
-                if (tk == "star") star = true;
-                if (tk == "ident") fields = fields.append([mkField(tx, t.2)]);
-            }
+            val stray = section == "tail" || section == "joinTail";
+            if (stray)
+                q.failAt(
+                    t.2,
+                    "erika: unexpected '" + tx + "' after the collection",
+                );
+            if (section == "head") headToks = headToks.append([t]);
             if (section == "afterFrom") {
                 srcName = tx;
                 srcSpan = t.2;
                 section = "tail";
             }
+            if (section == "join") {
+                joinName = tx;
+                joinSpan = t.2;
+                section = "joinTail";
+            }
+            if (section == "on") onToks = onToks.append([t]);
             if (section == "where") whereToks = whereToks.append([t]);
+            if (section == "group")
+                if (groupName == "") {
+                    groupName = tx;
+                    groupSpan = t.2;
+                }
             if (section == "order") orderToks = orderToks.append([t]);
+            if (section == "limit") limitToks = limitToks.append([t]);
         }
     }
+
+    // The select list: `*`, fields, and aggregates (`count(*)`, `sum(f)`, `avg(f)`,
+    // `min(f)`, `max(f)`). An item is #(kind, name, arg, span): kind `field`
+    // (name = the field) or `agg` (name = the function, arg = its field or `*`).
+    var star = false;
+    var items: Array<#(string, string, string, Span)> = [];
+    val ht = headToks.append([blankTok, blankTok]);
+    var hidx = 0;
+    var inAgg = false;
+    var aggFn = "";
+    var aggArg = "";
+    var aggSpan = Span(0, 0, 1);
+    for (headToks) { t ->
+        val tk = t.0;
+        val tx = t.1;
+        val nxt = ht.at(hidx + 1) ?? blankTok;
+        hidx = hidx + 1;
+        val nextOpens = nxt.0 == "paren" && nxt.1 == "(";
+        val consumed = inAgg;
+        if (consumed) {
+            if (tk == "star") aggArg = "*";
+            if (tk == "ident") aggArg = tx;
+            val closes = tk == "paren" && tx == ")";
+            val strayAgg = tk == "comma"
+                || tk == "keyword"
+                || tk == "number"
+                || tk == "string"
+                || tk == "op";
+            if (strayAgg)
+                q.failAt(
+                    t.2,
+                    "erika: malformed aggregate '"
+                        + aggFn
+                        + "': write "
+                        + aggFn
+                        + "(field), or count(*)",
+                );
+            if (closes) {
+                val isCount = aggFn == "count";
+                if (isCount)
+                    if (aggArg != "*")
+                        q.failAt(aggSpan, "erika: count takes '*': count(*)");
+                if (!isCount)
+                    if (aggArg == "" || aggArg == "*")
+                        q.failAt(
+                            aggSpan,
+                            "erika: "
+                                + aggFn
+                                + " takes one field: "
+                                + aggFn
+                                + "(field)",
+                        );
+                items = items.append([#("agg", aggFn, aggArg, aggSpan)]);
+                inAgg = false;
+            }
+        }
+        if (!consumed) {
+            if (tk == "star") star = true;
+            if (tk == "ident") {
+                if (nextOpens) {
+                    val isAggFn = tx == "count"
+                        || tx == "sum"
+                        || tx == "avg"
+                        || tx == "min"
+                        || tx == "max";
+                    if (!isAggFn)
+                        q.failAt(
+                            t.2,
+                            "erika: unknown aggregate '"
+                                + tx
+                                + "' (count, sum, avg, min, max)",
+                        );
+                    aggFn = tx;
+                    aggArg = "";
+                    aggSpan = t.2;
+                    inAgg = true;
+                }
+                if (!nextOpens) items = items.append([#("field", tx, "", t.2)]);
+            }
+        }
+    }
+    if (inAgg)
+        q.failAt(aggSpan, "erika: aggregate '" + aggFn + "' is not closed");
 
     // where clause → `or`-groups of `and`-groups of comparisons (precedence is
     // the nesting: a new `or` closes the current `or`-group, `and` only the
     // current comparison).
     val hasWhere = whereToks.length > 0;
-    var orGroups: Array<Array<#(string, string, string, Span, string, string, bool)>> = [];
-    var curAnd: Array<#(string, string, string, Span, string, string, bool)> = [];
+    var orGroups: Array<Array<#(string, string, string, Span, string, string, bool, Span, Span)>> = [];
+    var curAnd: Array<#(string, string, string, Span, string, string, bool, Span, Span)> = [];
     var curCmp: Array<#(string, string, Span)> = [];
     for (whereToks) { t ->
         val isAnd = t.0 == "keyword" && t.1 == "and";
@@ -650,40 +885,480 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
     }
     val hasOrder = orderToks.length > 0;
 
+    // limit: one token, a whole number or a hole.
+    var limitKind = "";
+    var limitText = "";
+    var limitSpan = Span(0, 0, 1);
+    for (limitToks) { lt ->
+        if (limitText != "")
+            q.failAt(lt.2, "erika: limit takes one number or one hole");
+        val isNum = lt.0 == "number" && !lt.1.contains(".");
+        val isHoleLim = isHolePlaceholder(lt.1);
+        val okLim = isNum || isHoleLim;
+        if (!okLim)
+            q.failAt(
+                lt.2,
+                "erika: limit takes a whole number or a hole, not '"
+                    + lt.1
+                    + "'",
+            );
+        limitKind = if (isNum) "number" else "hole";
+        limitText = lt.1;
+        limitSpan = lt.2;
+    }
+    val hasLimit = limitText != "";
+    if (hasLimit == false)
+        if (section == "limit")
+            q.failAt(srcSpan, "erika: limit takes a whole number or a hole");
+
+    // ── shape checks ─────────────────────────────────────────────────────────
+    val hasJoin = joinName != "";
+    val hasGroup = groupName != "";
+    val nAgg = items.filter({ i0 -> i0.0 == "agg" }).length;
+    val nField = items.filter({ i0 -> i0.0 == "field" }).length;
+    val hasAgg = nAgg > 0;
+    if (star)
+        if (items.length > 0)
+            q.failAt(
+                srcSpan,
+                "erika: '*' cannot be selected beside fields or aggregates",
+            );
+    if (!star)
+        if (items.length == 0)
+            q.failAt(srcSpan, "erika: select needs '*', fields or aggregates");
+    if (hasGroup)
+        if (star)
+            q.failAt(
+                groupSpan,
+                "erika: group by needs fields and aggregates, not '*'",
+            );
+    for (items) { it0 ->
+        val isField = it0.0 == "field";
+        if (isField)
+            if (hasAgg)
+                if (!hasGroup)
+                    q.failAt(
+                        it0.3,
+                        "erika: '"
+                            + it0.1
+                            + "' beside an aggregate needs group by "
+                            + it0.1,
+                    );
+        if (isField)
+            if (hasGroup)
+                if (it0.1 != groupName)
+                    q.failAt(
+                        it0.3,
+                        "erika: '"
+                            + it0.1
+                            + "' is neither the group by field nor an aggregate",
+                    );
+    }
+    if (hasAgg)
+        if (!hasGroup) {
+            if (hasOrder)
+                q.failAt(
+                    orderSpan,
+                    "erika: order by has nothing to order: an aggregate without group by answers one value",
+                );
+            if (hasLimit)
+                q.failAt(
+                    limitSpan,
+                    "erika: limit has nothing to cut: an aggregate without group by answers one value",
+                );
+        }
+    if (hasGroup)
+        if (hasOrder)
+            if (orderName != groupName)
+                q.failAt(
+                    orderSpan,
+                    "erika: with group by, order by names the group by field '"
+                        + groupName
+                        + "'",
+                );
+    // join <Name> on <a.f> = <b.g>: exactly three tokens, `=` between two
+    // qualified fields, one of each collection.
+    var onL = "";
+    var onR = "";
+    var onSpan = Span(0, 0, 1);
+    if (hasJoin) {
+        var oi = 0;
+        for (onToks) { ot ->
+            if (oi == 0) {
+                onL = ot.1;
+                onSpan = ot.2;
+            }
+            if (oi == 1)
+                if (ot.1 != "=")
+                    q.failAt(ot.2, "erika: a join condition is 'a.f = b.g'");
+            if (oi == 2) onR = ot.1;
+            oi = oi + 1;
+        }
+        if (oi != 3)
+            q.failAt(
+                joinSpan,
+                "erika: join " + joinName + " needs 'on a.f = b.g'",
+            );
+    }
+
     // ── resolve the source + dual lowering (③ code, ④ reference tree) ─────────
+    val src = srcName;
+    val jn = joinName;
     val known = q.lookup(srcName);
+    val joinKnown = if (hasJoin) q.lookup(joinName) else null;
+    if (hasJoin)
+        if (joinKnown == null)
+            q.failAt(
+                joinSpan,
+                "erika: unknown collection '" + joinName + "' in scope",
+            );
     if (known) {
         binding ->
+        // A field reads off `rv` (`row`, or the pair `row.0` / `row.1` after a join).
+        val fieldCode = { txt, span, rv ->
+            val ps = txt.split(".");
+            val np = ps.length;
+            val qual = ps.at(0) ?? "";
+            val fld = ps.at(np - 1) ?? "";
+            if (np > 2)
+                q.failAt(
+                    span,
+                    "erika: '" + txt + "' has more than one qualifier",
+                );
+            if (np == 1)
+                if (hasJoin)
+                    q.failAt(
+                        span,
+                        "erika: after a join every field is qualified: "
+                            + src
+                            + "."
+                            + txt
+                            + " or "
+                            + jn
+                            + "."
+                            + txt,
+                    );
+            val isQual = np == 2;
+            val okQual = qual == src || qual == jn;
+            if (isQual)
+                if (!okQual)
+                    q.failAt(
+                        span,
+                        "erika: '"
+                            + qual
+                            + "' is neither '"
+                            + src
+                            + "' nor a joined collection",
+                    );
+            val side = if (qual == jn) "1" else "0";
+            val out = if (hasJoin)
+                rv + "." + side + "." + fld
+            else
+                rv + "." + fld;
+            out;
+        };
+        // The collection a field belongs to, as a column: its element type is
+        // the type the field is compared against.
+        val witnessOf = { txt ->
+            val ps = txt.split(".");
+            val np = ps.length;
+            val qual = ps.at(0) ?? "";
+            val fld = ps.at(np - 1) ?? "";
+            val coll = if (np == 2) qual else src;
+            coll + ".map({ row -> row." + fld + " })";
+        };
+        val operandCode = { knd, txt, span ->
+            val isHole = isHolePlaceholder(txt);
+            val out = if (isHole)
+                "__h" + holes.indexOf(txt).toString()
+            else if (knd == "string")
+                "\"" + txt.split("'").join("") + "\""
+            else if (knd == "number")
+                txt
+            else
+                fieldCode(txt, span, "row");
+            out;
+        };
+        val opCode = { opText ->
+            val out = if (opText == "=")
+                "=="
+            else if (opText == "<>")
+                "!="
+            else
+                opText;
+            out;
+        };
+        val cmpCode = { cmp ->
+            val lc = operandCode(cmp.0, cmp.1, cmp.7);
+            val rc = operandCode(cmp.4, cmp.5, cmp.8);
+            val oc = opCode(cmp.2);
+            val out = if (cmp.6) lc + " " + oc + " " + rc else lc;
+            out;
+        };
+        // ③ the pipeline. `join` pairs every source row with the rows of the
+        // joined collection its condition matches (inner): a row is then
+        // `#(left, right)`.
         var pipe = "of(" + srcName + ")";
+        if (hasJoin) {
+            val lq = onL.split(".").at(0) ?? "";
+            val rq = onR.split(".").at(0) ?? "";
+            val okL = lq == src || lq == jn;
+            val okR = rq == src || rq == jn;
+            if (!okL)
+                q.failAt(
+                    onSpan,
+                    "erika: '"
+                        + lq
+                        + "' is neither '"
+                        + src
+                        + "' nor '"
+                        + jn
+                        + "'",
+                );
+            if (!okR)
+                q.failAt(
+                    onSpan,
+                    "erika: '"
+                        + rq
+                        + "' is neither '"
+                        + src
+                        + "' nor '"
+                        + jn
+                        + "'",
+                );
+            if (lq == rq)
+                q.failAt(
+                    onSpan,
+                    "erika: a join condition compares a field of each collection",
+                );
+            val lIsSrc = lq == src;
+            val lf = onL.split(".").at(1) ?? "";
+            val rf = onR.split(".").at(1) ?? "";
+            val lKey = if (lIsSrc) "l." + lf else "r." + lf;
+            val rKey = if (lIsSrc) "r." + rf else "l." + rf;
+            pipe = "of("
+                + src
+                + ").selectMany({ l -> "
+                + jn
+                + ".filter({ r -> "
+                + lKey
+                + " == "
+                + rKey
+                + " }).map({ r -> #(l, r) }) })";
+        }
         if (hasWhere) {
             val orParts = orGroups.map(
                 { andGroup -> andGroup.map({ cmp -> cmpCode(cmp) }).join(" && ") },
             );
             pipe = pipe + ".where({ row -> " + orParts.join(" || ") + " })";
         }
+        // With group by the rows are ordered by the key BEFORE they are grouped
+        // (groups come out in first-seen order, so they come out in key order),
+        // and the groups are an array from there on: the operators of a `Query`
+        // of groups would be dispatched without their receiver's type.
         if (hasOrder) {
             val opName = if (orderDesc) "orderByDescending" else "orderBy";
-            pipe = pipe + "." + opName + "({ row -> row." + orderName + " })";
+            val keyCode = fieldCode(orderName, orderSpan, "row");
+            pipe = pipe + "." + opName + "({ row -> " + keyCode + " })";
         }
-        val single = fields.length == 1;
-        val multi = fields.length > 1;
-        if (star) pipe = pipe + ".toArray()";
-        if (single) {
-            val proj = fields.map({ f -> "row." + f.0 }).join("");
-            pipe = pipe + ".select({ row -> " + proj + " }).toArray()";
-        }
-        if (multi) {
-            val binds = fields
-                .map({ f -> "val " + f.0 + " = row." + f.0 + "; " })
-                .join("");
-            val names = fields.map({ f -> f.0 }).join(", ");
+        if (hasGroup)
             pipe = pipe
-                + ".select({ row -> "
-                + binds
-                + "#("
-                + names
-                + ") }).toArray()";
+                + ".groupBy({ row -> "
+                + fieldCode(groupName, groupSpan, "row")
+                + " }).toArray()";
+        // The number of rows is written in the query (decision 312): `limit 1`
+        // answers one row, `?T` (`first()`); any other `limit n` keeps an array
+        // and cuts it (`take(n)`); with no `limit` the answer is the array.
+        val firstOne = hasLimit && limitKind == "number" && limitText == "1";
+        val limitCode = if (limitKind == "hole")
+            "__h" + holes.indexOf(limitText).toString()
+        else
+            limitText;
+        // The operators run as plain functions on a query: a method call on a
+        // receiver the checker has not typed yet (inside a hole's lambda) is
+        // dispatched by name alone on erlang, and `take` / `first` also name an
+        // array's own.
+        if (hasLimit)
+            if (!firstOne)
+                if (hasGroup) pipe = pipe + ".take(" + limitCode + ")";
+        if (hasLimit)
+            if (!firstOne)
+                if (!hasGroup)
+                    pipe = "queryTake(" + pipe + ", " + limitCode + ")";
+        // The aggregate an item names, on a query `qv` of rows.
+        val aggOn = { itm, qv, rv ->
+            val fnm = itm.1;
+            val fld = if (itm.2 == "*") "" else fieldCode(itm.2, itm.3, rv);
+            val lam = "{ " + rv + " -> " + fld + " }";
+            val out = if (fnm == "count")
+                "aggCount(" + qv + ")"
+            else if (fnm == "sum")
+                "aggSum(" + qv + ", " + lam + ")"
+            else if (fnm == "avg")
+                "aggAvg(" + qv + ", " + lam + ")"
+            else if (fnm == "min")
+                "aggMin(" + qv + ", " + lam + ")"
+            else
+                "aggMax(" + qv + ", " + lam + ")";
+            out;
+        };
+        if (hasAgg)
+            if (!hasGroup) {
+                // aggregates without group by: one value (a tuple for several)
+                val single = items.length == 1;
+                if (single)
+                    pipe = items.map({ i1 -> aggOn(i1, pipe, "row") }).join("");
+                if (!single) {
+                    val codes = items.map({ i1 -> aggOn(i1, "qq", "row") });
+                    pipe = "bindOnce("
+                        + pipe
+                        + ", { qq -> #("
+                        + codes.join(", ")
+                        + ") })";
+                }
+            }
+        if (hasGroup) {
+            // one row per group: its key and its aggregates
+            val groupItem = { i1 ->
+                val out = if (i1.0 == "field")
+                    "g.key"
+                else
+                    aggOn(i1, "groupRows(g)", "row");
+                out;
+            };
+            val sel = if (items.length == 1)
+                groupItem(items.at(0) ?? #("", "", "", Span(0, 0, 1)))
+            else
+                "#(" + items.map({ i1 -> groupItem(i1) }).join(", ") + ")";
+            val groupTerminal = if (firstOne) ".at(0)" else "";
+            pipe = pipe + ".map({ g -> " + sel + " })" + groupTerminal;
         }
+        val plainRows = !hasAgg && !hasGroup;
+        val plainEnd = if (firstOne) "" else ".toArray()";
+        if (plainRows) {
+            if (star) pipe = pipe + plainEnd;
+            if (!star) {
+                val single = items.length == 1;
+                if (single) {
+                    val one = items
+                        .map({ i1 -> fieldCode(i1.1, i1.3, "row") })
+                        .join("");
+                    pipe = pipe + ".select({ row -> " + one + " })" + plainEnd;
+                }
+                if (!single) {
+                    // plain fields of one collection are labeled by their names
+                    // (`val #(a, b) = r`); after a join the tuple is positional.
+                    val binds = if (hasJoin)
+                        ""
+                    else
+                        items
+                            .map(
+                                { i1 -> "val " + i1.1 + " = row." + i1.1 + "; " },
+                            )
+                            .join("");
+                    val parts = if (hasJoin)
+                        items
+                            .map({ i1 -> fieldCode(i1.1, i1.3, "row") })
+                            .join(", ")
+                    else
+                        items.map({ i1 -> i1.1 }).join(", ");
+                    pipe = pipe
+                        + ".select({ row -> "
+                        + binds
+                        + "#("
+                        + parts
+                        + ") })"
+                        + plainEnd;
+                }
+            }
+            if (firstOne) pipe = "queryFirst(" + pipe + ")";
+        }
+        // Each hole meets a column, a literal or an earlier hole: its witness
+        // (`holeBound`'s first argument) shares one type with it, so a mismatch is
+        // the ordinary type error ranged at the hole's own expression. A hole's
+        // first witness rides in `holeBound`; the others are `holeTie`s ahead of
+        // the pipeline. The number of rows is a whole number.
+        var ties: Array<#(i32, string)> = [];
+        for (orGroups) { andGroup ->
+            for (andGroup) { cmp ->
+                val lh = isHolePlaceholder(cmp.1);
+                val rh = isHolePlaceholder(cmp.5);
+                val anyH = lh || rh;
+                val li = holes.indexOf(cmp.1);
+                val ri = holes.indexOf(cmp.5);
+                val bothH = lh && rh;
+                val sameH = bothH && li == ri;
+                if (cmp.6)
+                    if (anyH)
+                        if (!sameH) {
+                            val hi0 = if (lh) li else ri;
+                            val oKind = if (lh) cmp.4 else cmp.0;
+                            val oText = if (lh) cmp.5 else cmp.1;
+                            val oSpan = if (lh) cmp.8 else cmp.7;
+                            val later = if (bothH) {
+                                if (li > ri) li else ri;
+                            } else hi0;
+                            val earlier = if (bothH) {
+                                if (li > ri) ri else li;
+                            } else 0;
+                            val witness = if (bothH)
+                                "[__h" + earlier.toString() + "]"
+                            else if (oKind == "ident")
+                                witnessOf(oText)
+                            else
+                                "[" + operandCode(oKind, oText, oSpan) + "]";
+                            ties = ties.append([#(later, witness)]);
+                        }
+            }
+        }
+        if (limitKind == "hole")
+            ties = ties.append([#(holes.indexOf(limitText), "[0]")]);
+        // Each hole is evaluated once, before the pipeline runs, in the order
+        // the query writes them (the first hole outermost).
+        var tieVals = "";
+        var ti = 0;
+        for (holes) { hq ->
+            val mine = ties.filter({ tt -> tt.0 == ti });
+            var k = 0;
+            for (mine) { mt ->
+                if (k > 0)
+                    tieVals = tieVals
+                        + "val __t"
+                        + ti.toString()
+                        + "_"
+                        + k.toString()
+                        + " = holeTie("
+                        + mt.1
+                        + ", __h"
+                        + ti.toString()
+                        + "); ";
+                k = k + 1;
+            }
+            ti = ti + 1;
+        }
+        var held = tieVals + pipe;
+        var hi = holes.length;
+        for (holes) { hp ->
+            hi = hi - 1;
+            val mine = ties.filter({ tt -> tt.0 == hi });
+            var firstWit = "";
+            for (mine) { mw ->
+                if (firstWit == "") firstWit = mw.1;
+            }
+            val head = if (firstWit != "")
+                "holeBound(" + firstWit + ", "
+            else
+                "bindOnce(";
+            held = head
+                + holes.at(hi)
+                + ", { __h"
+                + hi.toString()
+                + " -> "
+                + held
+                + " })";
+        }
+        pipe = held;
+        // ④ the reference tree
         var nodes: Array<CustomNode> = [];
         for (toks) { t ->
             val tk = t.0;
@@ -708,6 +1383,9 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
                 "none";
             val skip = tk == "comma" || tk == "paren";
             val isSrc = t.2.start == srcSpan.start && t.2.end == srcSpan.end;
+            val isJoinSrc = hasJoin
+                && t.2.start == joinSpan.start
+                && t.2.end == joinSpan.end;
             if (isSrc)
                 nodes = nodes.append(
                     [
@@ -720,7 +1398,19 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
                         ),
                     ],
                 );
-            val plain = !skip && !isSrc;
+            if (isJoinSrc)
+                nodes = nodes.append(
+                    [
+                        CustomNode(
+                            kind: tk,
+                            span: t.2,
+                            label: lbl,
+                            ref: joinKnown,
+                            children: [],
+                        ),
+                    ],
+                );
+            val plain = !skip && !isSrc && !isJoinSrc;
             if (plain)
                 nodes = nodes.append(
                     [
@@ -741,7 +1431,20 @@ pub default fn erika<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
             ref: null,
             children: nodes,
         );
-        return q.custom(root, q.build(pipe));
+        // LANGUAGE GAP: Two template expansions in one module share the locations of their built code — a loc-keyed plan of one lands on a call of the other; the code is padded to start at the literal's own line and column.
+        val origin = q.source();
+        var pad = "";
+        var padLine = 1;
+        while (padLine < origin.line) {
+            pad = pad + "\n";
+            padLine = padLine + 1;
+        }
+        var padCol = 1;
+        while (padCol < origin.col) {
+            pad = pad + " ";
+            padCol = padCol + 1;
+        }
+        return q.custom(root, q.build(pad + pipe));
     }
     // Unknown collection → a diagnostic ranged at the offending name *inside* the
     // string (sublanguage-lsp F2), not at the whole template.
@@ -956,6 +1659,38 @@ test "erika query: ${} interp inlines a runtime value on both sides" {
     val ge = 5;
     val mid = erika "select name from erikaCities where pop >= ${ge} and pop <= ${limit} order by name asc";
     assert mid.join(",") == "Lyon,Paris";
+}
+
+test "erika query: a hole is any expression" {
+    val next = { -> 5 };
+    val names = erika "select name from erikaCities where pop >= ${next()} order by name asc";
+    assert names.join(",") == "Lyon,Paris";
+    val base = 2;
+    val plus = erika "select name from erikaCities where pop > ${base * 2
+        + 1} order by name asc";
+    assert plus.join(",") == "Paris";
+}
+
+test "erika query: a hole on the left, a string hole, holes in or and and" {
+    val pivot = 5;
+    val left = erika "select name from erikaCities where ${pivot} <= pop order by name asc";
+    assert left.join(",") == "Lyon,Paris";
+    val who = "Nice";
+    val one = erika "select pop from erikaCities where name = ${who}";
+    assert one.join(",") == "3";
+    val lo = 3;
+    val hi = 9;
+    val ends = erika "select name from erikaCities where pop = ${lo} or pop = ${hi} order by name asc";
+    assert ends.join(",") == "Nice,Paris";
+}
+
+fn erikaAdults(minAge: i32) -> Array<string> {
+    return erika "select name from erikaCities where pop >= ${minAge} order by name asc";
+}
+
+test "erika query: a hole reads a parameter" {
+    assert erikaAdults(5).join(",") == "Lyon,Paris";
+    assert erikaAdults(9).join(",") == "Paris";
 }
 
 // ── tests: select over `var listas = [..]` ───────────────────────────────────

@@ -1,0 +1,2 @@
+error: erika: 'pop' is neither the group by field nor an aggregate
+  --> src/main.bp:12:27

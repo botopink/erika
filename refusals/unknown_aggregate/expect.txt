@@ -1,0 +1,2 @@
+error: erika: unknown aggregate 'median' (count, sum, avg, min, max)
+  --> src/main.bp:12:27

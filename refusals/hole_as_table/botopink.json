@@ -1,0 +1,11 @@
+{
+  "name": "refusal-hole_as_table",
+  "version": "0.0.1",
+  "description": "front 137: a hole never stands for a table.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}

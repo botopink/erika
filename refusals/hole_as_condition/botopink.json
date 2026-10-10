@@ -1,0 +1,11 @@
+{
+  "name": "refusal-hole_as_condition",
+  "version": "0.0.1",
+  "description": "front 137: a hole alone is not a condition.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}

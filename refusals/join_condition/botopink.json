@@ -1,0 +1,11 @@
+{
+  "name": "refusal-join-condition",
+  "version": "0.0.1",
+  "description": "front 137: a join condition is a.f = b.g.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}

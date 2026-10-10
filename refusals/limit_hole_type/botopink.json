@@ -1,0 +1,11 @@
+{
+  "name": "refusal-limit-hole-type",
+  "version": "0.0.1",
+  "description": "front 137: a limit hole is a whole number.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}

@@ -1,0 +1,2 @@
+error: erika: a hole is a bound value, never text: it cannot stand inside a string literal
+ --> src/main.bp:9:19

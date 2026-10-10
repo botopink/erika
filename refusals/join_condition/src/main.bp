@@ -1,0 +1,14 @@
+import erika from "erika";
+
+type City(name: string, pop: i32)
+
+type Owner(owner: string, city: string)
+
+val cities = [City(name: "Lyon", pop: 5)];
+
+val owners = [Owner(owner: "ana", city: "Lyon")];
+
+fn main() {
+    val r = erika "select * from owners join cities on owners.city > cities.name";
+    @print(r);
+}

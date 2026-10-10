@@ -9,8 +9,190 @@
 //// core's own tests. Nothing from std is re-exported, and mocking is std's
 //// (decision 71).
 
-import {of} from "erika";
+import erika, {of, QueryContext, QueryTable, QueryColumn} from "erika";
 
 test "erika-test: the core member resolves from the test member" {
     assert of([1, 2, 3]).count() == 3;
+}
+
+type City(
+    name: string,
+    pop: i32,
+)
+
+val cities = [
+    City(name: "Lyon", pop: 5),
+    City(name: "Paris", pop: 9),
+    City(name: "Nice", pop: 3),
+];
+
+// ── tests: the number of rows, aggregates, group by and join (consumer side) ──
+
+type Sale(
+    region: string,
+    amount: i32,
+    rate: f64,
+)
+
+val sales = [
+    Sale(region: "north", amount: 10, rate: 1.5),
+    Sale(region: "south", amount: 4, rate: 2.5),
+    Sale(region: "north", amount: 6, rate: 3.5),
+    Sale(region: "east", amount: 7, rate: 0.5),
+];
+
+type Owner(
+    owner: string,
+    city: string,
+)
+
+val owners = [
+    Owner(owner: "ana", city: "Paris"),
+    Owner(owner: "bob", city: "Lyon"),
+    Owner(owner: "cy", city: "Paris"),
+    Owner(owner: "dan", city: "Rome"),
+];
+
+test "erika query: limit n keeps an array and cuts it" {
+    val two = erika "select name from cities order by name asc limit 2";
+    assert two.join(",") == "Lyon,Nice";
+    val all = erika "select * from cities limit 5";
+    assert all.length == 3;
+}
+
+test "erika query: limit 1 answers one row, an optional" {
+    val one = erika "select name from cities order by pop desc limit 1";
+    assert one ?? "none" == "Paris";
+    val row = erika "select * from cities where pop > 100 limit 1";
+    assert row == null;
+    val city = erika "select * from cities order by name asc limit 1";
+    assert city?.pop ?? -1 == 5;
+}
+
+test "erika query: limit takes a hole, the number of rows" {
+    val n = 2;
+    val two = erika "select name from cities order by name asc limit ${n}";
+    assert two.join(",") == "Lyon,Nice";
+}
+
+test "erika query: aggregates without group by answer one value" {
+    val n = erika "select count(*) from cities where pop >= 5";
+    assert n == 2;
+    val total = erika "select sum(pop) from cities";
+    assert total == 17;
+    val lo = erika "select min(pop) from cities";
+    assert lo ?? -1 == 3;
+    val hi = erika "select max(pop) from cities";
+    assert hi ?? -1 == 9;
+    val mean = erika "select avg(rate) from sales";
+    assert mean == 2.0;
+}
+
+test "erika query: several aggregates answer a tuple" {
+    val both = erika "select count(*), sum(amount) from sales where amount > 5";
+    val #(n, total) = both;
+    assert n == 3;
+    assert total == 23;
+}
+
+test "erika query: group by yields one row per key with its aggregates" {
+    val rows = erika "select region, count(*), sum(amount) from sales group by region order by region asc";
+    val labels = rows.map({ r ->
+        val #(region, n, total) = r;
+        region + ":" + n.toString() + ":" + total.toString();
+    });
+    assert labels.join(",") == "east:1:7,north:2:16,south:1:4";
+}
+
+test "erika query: group by after where, with limit" {
+    val rows = erika "select region, max(amount) from sales where amount >= 6 group by region order by region desc limit 2";
+    val labels = rows.map({ r ->
+        val #(a, b) = r;
+        val c = b ?? -1;
+        a + ":" + c.toString();
+    });
+    assert labels.join(",") == "north:10,east:7";
+}
+
+test "erika query: group by alone lists the keys" {
+    val keys = erika "select region from sales group by region order by region asc";
+    assert keys.join(",") == "east,north,south";
+}
+
+test "erika query: join pairs rows by a condition (inner)" {
+    val pairs = erika "select owners.owner, cities.pop from owners join cities on owners.city = cities.name where cities.pop >= 5 order by owners.owner asc";
+    val labels = pairs.map({ r ->
+        val #(owner, pop) = r;
+        owner + ":" + pop.toString();
+    });
+    assert labels.join(",") == "ana:9,bob:5,cy:9";
+}
+
+test "erika query: join with * yields the pair of rows" {
+    val pairs = erika "select * from owners join cities on cities.name = owners.city order by owners.owner desc limit 1";
+    val #(o, c) = pairs ?? #(
+        Owner(owner: "", city: ""),
+        City(name: "", pop: 0),
+    );
+    assert o.owner == "cy";
+    assert c.pop == 9;
+}
+
+test "erika query: join counts" {
+    val n = erika "select count(*) from owners join cities on owners.city = cities.name";
+    assert n == 3;
+    val big = erika "select count(*) from owners join cities on owners.city = cities.name where cities.pop >= 9";
+    assert big == 2;
+}
+
+// ── the database target's declarations ──────────────────────────────────────
+// erika names no library: its tests implement `QueryContext` themselves.
+
+// Answers an empty set, or fails with `answer` when it is not empty.
+type RecordingContext(
+    answer: string,
+) implement QueryContext<string> {
+    pub fn run<T>(
+        self: Self,
+        sql: string,
+        params: Array<string>,
+    ) -> @Result<Array<T>, string> {
+        if (self.answer != "") throw self.answer;
+        return [];
+    }
+}
+
+test "erika-test: QueryTable and QueryColumn describe an entity" {
+    val table = QueryTable(
+        name: "users",
+        columns: [
+            QueryColumn(field: "id", column: "id"),
+            QueryColumn(field: "fullName", column: "full_name"),
+        ],
+    );
+    assert table.name == "users";
+    assert table.columns.length == 2;
+    assert table.columns.map({ c -> c.column }).join(",") == "id,full_name";
+}
+
+test "erika-test: a QueryContext of its own runs a statement" {
+    val ctx = RecordingContext(answer: "");
+    val rows = ctx.run("select * from users where id = $1", ["7"]);
+    assert rows.isOk();
+    val refused = RecordingContext(answer: "closed").run("select 1", []);
+    assert refused.isError();
+}
+
+test "erika query: holes bind in a join, a group and a limit together" {
+    val min = 5;
+    val cap = 1;
+    val rows = erika "select owners.owner from owners join cities on owners.city = cities.name where cities.pop >= ${min} order by owners.owner asc limit ${cap}";
+    assert rows.join(",") == "ana";
+    val floor = 6;
+    val groups = erika "select region, sum(amount) from sales where amount >= ${floor} group by region order by region asc";
+    val labels = groups.map({ g ->
+        val #(region, total) = g;
+        region + ":" + total.toString();
+    });
+    assert labels.join(",") == "east:7,north:16";
 }

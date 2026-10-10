@@ -1,0 +1,2 @@
+error: erika: a join condition compares a field of each collection
+  --> src/main.bp:12:56

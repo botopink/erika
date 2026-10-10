@@ -1,0 +1,11 @@
+{
+  "name": "refusal-join-unknown",
+  "version": "0.0.1",
+  "description": "front 137: a joined collection is in scope.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}

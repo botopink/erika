@@ -1,0 +1,11 @@
+import erika from "erika";
+
+type Person(name: string, age: i32)
+
+val people = [Person(name: "Ann", age: 30)];
+
+fn main() {
+    val min = "x";
+    val r = erika "select name from people where age >= ${min}";
+    @print(r.length);
+}

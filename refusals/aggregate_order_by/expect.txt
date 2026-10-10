@@ -1,0 +1,2 @@
+error: erika: order by has nothing to order: an aggregate without group by answers one value
+  --> src/main.bp:12:57

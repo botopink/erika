@@ -1,0 +1,2 @@
+error: erika: after a join every field is qualified: owners.owner or cities.owner
+  --> src/main.bp:12:27

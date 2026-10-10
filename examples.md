@@ -52,7 +52,8 @@ compile time and expanded into the fluent pipeline. The grammar (keywords
 lowercase) is:
 
 ```text
-select <* | f1[, f2…]> from <Name> [where <cond>] [order by <field> [asc|desc]]
+select <* | item[, item…]> from <Name> [join <Name> on <a.f> = <b.g>] [where <cond>]
+       [group by <field>] [order by <field> [asc|desc]] [limit <n | ${hole}>]
 ```
 
 ```bp
@@ -91,6 +92,35 @@ val bigRows = erika """
 
 The referenced collection (`cities`) is resolved against the caller's top-level
 scope — the same caller-scope resolution `html` uses for its builders.
+
+### Holes, `limit`, aggregates, `group by`, `join`
+
+```bp
+type Order(city: string, total: i32)
+val orders = [
+    Order(city: "Lyon", total: 10), Order(city: "Paris", total: 4),
+    Order(city: "Lyon", total: 6),  Order(city: "Nice",  total: 7),
+];
+
+// a hole is a bound value (any expression, evaluated once, typed against the field)
+fn atLeast(min: i32) -> Array<string> {
+    return erika "select name from cities where pop >= ${min} order by name asc";
+}
+
+// `limit n` cuts the rows; `limit 1` answers one row, `?T`
+val top = erika "select name from cities order by pop desc limit 1";   // ?string → "Paris"
+val two = erika "select name from cities order by name asc limit 2";   // ["Lyon", "Nice"]
+
+// aggregates: one value without `group by`
+val n = erika "select count(*) from orders where total > 5";           // 3
+
+// `group by`: a tuple per key
+val sums = erika "select city, sum(total) from orders group by city order by city asc";
+// [#("Lyon", 16), #("Nice", 7), #("Paris", 4)]
+
+// `join` (inner): fields are qualified; a row is the matched pair
+val pairs = erika "select orders.total, cities.pop from orders join cities on orders.city = cities.name order by orders.total asc";
+```
 
 ## `select` over a `var listas = [..]`
 

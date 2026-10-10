@@ -130,6 +130,65 @@ fn countNames(xs: Array<string>) -> i32 {
     return xs.length;
 }
 
+// ── 137: holes, the number of rows, aggregates, group by and join ─────────────
+
+type Order(city: string, total: i32)
+
+val orders = [
+    Order(city: "Lyon", total: 10),
+    Order(city: "Paris", total: 4),
+    Order(city: "Lyon", total: 6),
+    Order(city: "Nice", total: 7),
+];
+
+// 9) a hole `${…}` is a bound value: any expression, evaluated once, typed
+//    against the field it is compared with — a parameter here.
+fn citiesAtLeast(min: i32) -> string {
+    val names = erika "select name from cities where pop >= ${min} order by name asc";
+    return names.join(",");
+}
+
+// 10) `limit n` cuts the rows; `limit 1` answers one row, an optional (`?T`);
+//     the number can be a hole.
+fn biggestCity() -> string {
+    val one = erika "select name from cities order by pop desc limit 1";
+    return one ?? "none";
+}
+
+fn firstCities(n: i32) -> string {
+    val some = erika "select name from cities order by name asc limit ${n}";
+    return some.join(",");
+}
+
+// 11) aggregates: `count(*)`, `sum`, `avg`, `min`, `max` — one value without
+//     `group by`.
+fn orderCount() -> i32 {
+    return erika "select count(*) from orders where total > 5";
+}
+
+// 12) `group by`: one row per key — the key and its aggregates, as a tuple.
+fn totalsByCity() -> string {
+    val rows = erika "select city, sum(total) from orders group by city order by city asc";
+    return rows
+        .map({ r ->
+            val #(city, total) = r;
+            city + "=" + total.toString();
+        })
+        .join(",");
+}
+
+// 13) `join` (inner): every field is qualified by its collection; a row is the
+//     pair of rows the condition matches, or the fields picked from them.
+fn cityOfOrders() -> string {
+    val rows = erika "select orders.total, cities.pop from orders join cities on orders.city = cities.name where cities.pop >= 5 order by orders.total asc";
+    return rows
+        .map({ r ->
+            val #(total, pop) = r;
+            total.toString() + "/" + pop.toString();
+        })
+        .join(",");
+}
+
 fn main() {
     @print(adultNames()); // Ann, Cy
     @print(evenSquares()); // 4-16-36
@@ -137,6 +196,9 @@ fn main() {
     @print(bigCityNames()); // Lyon, Paris
     @print(bigCityLabels()); // Lyon:5, Paris:9
     @print(squareBigBoxes()); // sq
+    @print(citiesAtLeast(5)); // Lyon,Paris
+    @print(biggestCity()); // Paris
+    @print(totalsByCity()); // Lyon=16,Nice=7,Paris=4
 }
 
 test "list → query → join: adult names, sorted" {
@@ -183,4 +245,26 @@ test "two erika strings in one scope expand to independent queries" {
     val labels = erika "select label from boxes where w = h order by label asc";
     assert names.join(",") == "Lyon,Paris";
     assert labels.join(",") == "sq,tiny";
+}
+
+test "a hole is a bound value, typed against its field" {
+    assert citiesAtLeast(5) == "Lyon,Paris";
+    assert citiesAtLeast(9) == "Paris";
+}
+
+test "limit cuts the rows and limit 1 answers an optional" {
+    assert biggestCity() == "Paris";
+    assert firstCities(2) == "Lyon,Nice";
+}
+
+test "an aggregate without group by answers one value" {
+    assert orderCount() == 3;
+}
+
+test "group by yields one row per key" {
+    assert totalsByCity() == "Lyon=16,Nice=7,Paris=4";
+}
+
+test "join pairs the rows a condition matches" {
+    assert cityOfOrders() == "4/9,6/5,10/5";
 }

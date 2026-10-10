@@ -1,0 +1,11 @@
+{
+  "name": "refusal-count-field",
+  "version": "0.0.1",
+  "description": "front 137: count takes *.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}

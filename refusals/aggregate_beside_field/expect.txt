@@ -1,0 +1,2 @@
+error: erika: 'name' beside an aggregate needs group by name
+  --> src/main.bp:12:27

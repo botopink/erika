@@ -1,0 +1,11 @@
+{
+  "name": "refusal-hole_in_string",
+  "version": "0.0.1",
+  "description": "front 137: a hole never stands inside a string literal.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}

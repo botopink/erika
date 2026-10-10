@@ -1,0 +1,11 @@
+{
+  "name": "refusal-limit-two-values",
+  "version": "0.0.1",
+  "description": "front 137: limit takes one value.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}

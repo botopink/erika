@@ -1,0 +1,11 @@
+{
+  "name": "refusal-hole_type_mismatch",
+  "version": "0.0.1",
+  "description": "front 137: a hole is type-checked against the field it is compared with.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}

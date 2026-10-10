@@ -1,0 +1,11 @@
+{
+  "name": "refusal-hole_unbound",
+  "version": "0.0.1",
+  "description": "front 137: a hole names a value that is not bound.",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "erlang",
+  "dependencies": {
+    "erika": { "path": "../../modules/erika" }
+  }
+}
