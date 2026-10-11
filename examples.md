@@ -1,7 +1,7 @@
 # erika — examples
 
 > Path: `repository/erika/`
-> Sibling (AGENTS): [`./AGENTS.md`](AGENTS.md) · Docs: [`./docs.md`](docs.md)
+> Sibling (AGENTS): [`./AGENTS.md`](AGENTS.md) · Docs: [`./conformance/docs.md`](conformance/docs.md)
 > Parent (workspace): [`../../AGENTS.md`](../../AGENTS.md)
 
 All examples assume `erika` is a declared dependency — the object form, one source per entry:
@@ -182,5 +182,5 @@ val paresPorDez = erika.of(nums).where({ n -> n % 2 == 0 }).select({ n -> n * 10
 
 ## See also
 
-- The operator catalogue + grammar → [`./docs.md`](docs.md).
+- The operator catalogue + grammar → [`./conformance/docs.md`](conformance/docs.md).
 - The package contract + comptime-eval constraints → [`./AGENTS.md`](AGENTS.md).

@@ -1,10 +1,10 @@
 # erika — C#/LINQ-style queries
 
 > Path: `repository/erika/`
-> Sibling (AGENTS): [`./AGENTS.md`](AGENTS.md)
-> Examples: [`./examples.md`](examples.md)
-> Parent (workspace): [`../../AGENTS.md`](../../AGENTS.md)
-> Front: [`../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md`](../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md)
+> Sibling (AGENTS): [`./AGENTS.md`](../AGENTS.md)
+> Examples: [`./examples.md`](../examples.md)
+> Parent (workspace): [`../../AGENTS.md`](../../../AGENTS.md)
+> Front: [`../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md`](../../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md)
 
 `erika` is botopink's answer to C#'s **LINQ**: a fluent query vocabulary over
 `Array<T>`, plus a SQL-subset `erika "…"` template. It is **opt-in** — reached via
@@ -28,10 +28,7 @@ Declare it as a dependency and import what you need:
 { "dependencies": { "erika": { "workspace": true } } }
 ```
 
-```bp
-import {erika} from "erika";   // the `erika` namespace + the `erika "…"` template
-import {Query} from "erika";   // the Query<T> type (for annotations)
-```
+<!-- example: loading_imports -->
 
 The loader walks up from `cwd` and, at each ancestor, considers these roots (nearest-first): the
 ancestor itself when its `botopink.json` is a workspace, `repository/botopink-lang/libs`,
@@ -139,15 +136,7 @@ so the two forms parse identically.
 erika names no persistence library (decision 113). It declares what the SQL target needs
 and a persistence library (dbcontext's `DbContext`, decision 398) implements and records:
 
-```bp
-pub type QueryColumn(field: string, column: string)
-pub type QueryTable(name: string, columns: Array<QueryColumn>)   // the meta an entity records
-
-pub behavior QueryContext<E> {
-    // `$1…$n` in `sql`, bound from `params` (text, in hole order); the rows decoded as T
-    fn run<T>(self: Self<E>, sql: string, params: Array<string>) -> @Result<Array<T>, E>;
-}
-```
+<!-- example: query_context_declared -->
 
 `E` is the implementor's own error, so erika names no library's.
 
@@ -172,10 +161,10 @@ pub behavior QueryContext<E> {
 > binds the package's `pub default fn` (`package-default-dsl`, v0.beta.14;
 > the underlying bare-imported template-fn binding landed earlier in
 > v0.beta.8 via the generic-loader-binding keystone). A runnable consumer
-> lives at [`./examples/erika-linq/`](examples/erika-linq/).
+> lives at [`./examples/erika-linq/`](../examples/erika-linq/).
 
 ## See also
 
-- Runnable examples → [`./examples.md`](examples.md).
-- The package contract + comptime-eval constraints → [`./AGENTS.md`](AGENTS.md).
-- Full language reference → [`../botopink-lang/docs.md`](../botopink-lang/docs.md).
+- Runnable examples → [`./examples.md`](../examples.md).
+- The package contract + comptime-eval constraints → [`./AGENTS.md`](../AGENTS.md).
+- Full language reference → [`../botopink-lang/docs.md`](../../botopink-lang/docs.md).

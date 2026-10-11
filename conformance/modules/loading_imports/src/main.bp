@@ -1,0 +1,10 @@
+import {erika} from "erika";
+import {Query, of} from "erika";
+
+fn evens(xs: Array<i32>) -> Query<i32> {
+    return of(xs).where({ n -> n % 2 == 0 });
+}
+
+pub fn main() {
+    @println(evens([1, 2, 3, 4]).count());
+}

@@ -59,12 +59,12 @@ val adults = erika """
 - ✅ `erika "…"` template fn — comptime SQL-subset → fluent pipeline.
 - ✅ Span-aware diagnostics via `@ExprCustom<Element>` overlay.
 
-See [docs.md](docs.md) for the grammar and the loader notes.
+See [conformance/docs.md](conformance/docs.md) for the grammar and the loader notes.
 
 ## Docs
 
 - [AGENTS.md](AGENTS.md) — design + the "not std" rule.
-- [docs.md](docs.md) — reference: what this lib provides + the grammar.
+- [conformance/docs.md](conformance/docs.md) — reference: what this lib provides + the grammar.
 - [examples.md](examples.md) — both forms, runnable.
 - [examples/](examples/) — `erika-linq` demo.
 

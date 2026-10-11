@@ -2,7 +2,7 @@
 
 > Path: `repository/erika/`
 > Parent (workspace): [`../../AGENTS.md`](../../AGENTS.md) · Sibling (core): [`../botopink-lang/AGENTS.md`](../botopink-lang/AGENTS.md)
-> Docs: [`./docs.md`](docs.md) · Examples: [`./examples.md`](examples.md)
+> Docs: [`./conformance/docs.md`](conformance/docs.md) · Examples: [`./examples.md`](examples.md)
 > Front: [`../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md`](../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md)
 > (the front that owns this tree in 1.0.10-beta; the v0.beta.7 spec it was born from is gone)
 
@@ -32,7 +32,7 @@ member `modules/erika/`**; `from "erika"` resolves to it, never to the umbrella.
 ```text
 erika/
 ├── AGENTS.md          ← you are here
-├── docs.md            ← what this lib provides + the grammar + loading notes
+├── conformance/       ← the reference and its examples (decision 463): `docs.md` (what this lib provides + the grammar + loading notes) and `modules/<example>/` cells (`botopink cell check conformance/`)
 ├── examples.md        ← both forms (fluent + `erika "…"`), runnable
 ├── botopink.json      ← WORKSPACE: name erika · version · description ·
 │                        workspaces ["modules/*", "examples/*"]. No `targets`: a member
@@ -170,7 +170,7 @@ member that is a library and lists no `files` is `✗ ships nothing`.
   documents at `modules/erika/src/erika.bp:375` — a token is `#(string, string, Span)`, a
   projected field `#(string, Span)`, a comparison the seven-element tuple
   `buildCmp` answers.
-- Keep this file, `docs.md`, `examples.md`, and the spec in sync in the same
+- Keep this file, `conformance/docs.md`, `examples.md`, and the spec in sync in the same
   change that touches the lib.
 
 ## Formatting

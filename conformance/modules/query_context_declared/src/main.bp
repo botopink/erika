@@ -1,0 +1,7 @@
+import {QueryColumn, QueryTable, QueryContext} from "erika";
+
+pub fn main() {
+    val table = QueryTable(name: "users", columns: [QueryColumn(field: "name", column: "user_name")]);
+    @println(table.name);
+    @println(table.columns.length);
+}
