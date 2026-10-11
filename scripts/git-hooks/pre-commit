@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # pre-commit — the tracked pre-commit gate of this repository.
 #
-# Self-contained: it sources scripts/git-hooks/lib/runner-standalone.sh from
-# this repository and reaches nothing outside it, so a standalone clone, a
-# checkout inside the botopink meta workspace and a worktree all run the same
-# gate. Install it once per clone:
+# Self-contained: it calls scripts/gate.sh of this repository, which sources
+# scripts/git-hooks/lib/runner-standalone.sh and reaches nothing outside it, so
+# a standalone clone, a checkout inside the botopink meta workspace and a
+# worktree all run the same gate. The hook never runs conformance (decision
+# 470): a front's Conformance step and CI run `scripts/gate.sh` whole.
+# Install it once per clone:
 #
 #   git config core.hooksPath scripts/git-hooks
 set -euo pipefail
 
 echo "── pre-commit ──"
-# shellcheck source=lib/runner-standalone.sh
-. "$(git rev-parse --show-toplevel)/scripts/git-hooks/lib/runner-standalone.sh"
-runStandaloneGate
+exec "$(git rev-parse --show-toplevel)/scripts/gate.sh" --staged --no-conformance

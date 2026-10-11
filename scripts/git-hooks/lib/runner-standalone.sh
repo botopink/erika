@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# runner-standalone.sh — the pre-commit gate of a botopink library.
+# runner-standalone.sh — the gate of a botopink library.
 #
-# Sourced by scripts/git-hooks/pre-commit. It is the only runner and it is one
+# Sourced by scripts/gate.sh (the one entry: the pre-commit hook calls it with
+# `--staged --no-conformance`, CI and a front's Conformance step call it whole).
+# It is the only runner and it is one
 # text in every library repository (the meta repository's `hook-integrity`
 # workflow compares the bytes): it needs nothing outside the repository it sits
 # in — standalone clone, meta checkout, worktree, bpmp packing — and it names
@@ -10,7 +12,7 @@
 #
 # Stages, in order:
 #
-#   1. staged files  no snapshot candidate (`*.snap.new` / `*.snap.md.new` — a
+#   1. staged files  (`--staged` only) no snapshot candidate (`*.snap.new` / `*.snap.md.new` — a
 #                    mismatch writes one, it is recorded by renaming it, never
 #                    committed) and no conflict marker;
 #   2. the compiler  found, or the gate fails saying how to provide one;
@@ -22,11 +24,23 @@
 #                    every target its manifest declares;
 #   6. refusals      every `refusals/*/` project is refused by `botopink check`
 #                    with the lines of its `expect.txt`, when the repository has
-#                    a `refusals/` directory.
+#                    a `refusals/` directory;
+#   7. conformance   `botopink cell check conformance/` (decisions 463, 464):
+#                    every `conformance/modules/*/` cell on the targets it
+#                    declares; a mismatch writes a `.snap.new` candidate and is
+#                    red. Skipped by `--no-conformance` (the hook's, decision
+#                    470), which prints that it was not run.
+#
+# Arguments of `runStandaloneGate` (scripts/gate.sh forwards its own):
+# `--staged`, `--no-conformance`, `--jobs <N>` — the total of jobs the cell
+# pools may use (default: the machine's, as when the gate runs alone). The
+# runner knows no pool and no lock: a scheduler above it, when there is one,
+# only hands it a number (decisions 468, 469).
 #
 # Stages 4 and 5 run their cells side by side on a pool sized to the machine
 # (`gatePool`: one per CPU, bounded by memory, a cell admitted while the
-# runnable threads are at most the CPUs) and print their report in plan order
+# runnable threads are at most the CPUs; with `--jobs <N>` the width is N and
+# the admission is left to whoever handed the number) and print their report in plan order
 # once every cell has finished — the same lines, cell for cell, the
 # one-at-a-time gate printed. Front 115 of 1.0.11-beta measured emilia's
 # serial hook at ~4 000 s.
@@ -41,8 +55,8 @@
 # gate fails at the end — one run tells the whole truth.
 #
 # The functions `requireBotopink`, `runRepositoryStagesGate`, `runTestsGate`,
-# `runExamplesGate` and `runRefusalsGate` are also what CI and
-# `scripts/check-refusals.sh` call: they report their reds and return non-zero.
+# `runExamplesGate`, `runRefusalsGate` and `runConformanceGate` are also what
+# `scripts/check-refusals.sh` calls: they report their reds and return non-zero.
 set -euo pipefail
 
 RED='\033[0;31m'
@@ -57,6 +71,9 @@ pass() { echo -e "${GREEN}✓ $1${NC}"; }
 # the environment, and independent of the caller's working directory.
 gate_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 gate_runner="$gate_root/scripts/git-hooks/lib/runner-standalone.sh"
+# The total of jobs the cell pools may use, set by `runStandaloneGate --jobs`.
+# Assigned (empty) on every source, never read from the environment.
+gate_jobs_total=""
 
 # locateBotopink — the compiler's path on stdout, or status 1.
 #
@@ -241,6 +258,7 @@ gateCpus() {
 # gateJobs — how many cells run at once.
 gateJobs() {
     local jobs avail_kb by_mem
+    if [ -n "$gate_jobs_total" ]; then echo "$gate_jobs_total"; return 0; fi
     jobs=$(gateCpus)
     avail_kb=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null || true)
     if [ -n "$avail_kb" ]; then
@@ -258,7 +276,7 @@ gateJobs() {
 # <dir>/<index>.rc. A cell with no .rc did not run, and is reported red.
 gateCell() {
     local dir="$1" mode="$2" bin="$3" i="$4" cwd="$5" target="$6" r cpus code out
-    if [ -r /proc/loadavg ]; then
+    if [ -z "$gate_jobs_total" ] && [ -r /proc/loadavg ]; then
         cpus=$(gateCpus)
         while [ -n "$(ls -A "$dir/inflight" 2>/dev/null)" ]; do
             read -r _ _ _ r _ </proc/loadavg
@@ -286,6 +304,7 @@ gatePool() {
     local dir="$1" mode="$2" bin="$3"
     mkdir -p "$dir/inflight"
     [ -s "$dir/plan" ] || return 0
+    export gate_jobs_total
     export -f gateCell gateCpus
     xargs -0 -n 3 -P "$(gateJobs)" "$BASH" -c 'gateCell "$@"' gate-cell "$dir" "$mode" "$bin"         < "$dir/plan" || true
 }
@@ -449,13 +468,64 @@ runRefusalsGate() {
     pass "refusals: $cases case(s) refused with their exact message"
 }
 
-# runStandaloneGate — the pre-commit gate: the six stages above.
+# runConformanceGate <botopink-bin>
+#
+# Stage 7 (decisions 463, 464): `botopink cell check conformance/` — every cell
+# under `conformance/modules/*/` is built and run on every target it declares
+# and compared with its accepted snapshots; a difference writes a `.snap.new`
+# candidate beside the snapshot and is red, and a person accepts it by renaming.
+# The stage exists when `conformance/modules/` holds a cell (a directory with
+# `src/`); with none, there is nothing to check and the stage is green.
+runConformanceGate() {
+    local bin="$1"
+    [ -d "$gate_root/conformance" ] || return 0
+    # No cell yet (a `conformance/` that holds only `docs.md`) is nothing to check.
+    [ -n "$(find "$gate_root/conformance/modules" -type d -name src -print -quit 2>/dev/null)" ] || return 0
+    echo -n "  Checking conformance/ (botopink cell check)... "
+    local log
+    log=$(mktemp)
+    if ( cd "$gate_root" && "$bin" cell check conformance/ ) >"$log" 2>&1 </dev/null; then
+        echo -e "${GREEN}✓${NC}"
+        rm -f "$log"
+        pass "conformance: every cell of conformance/ answers its snapshots"
+        return 0
+    fi
+    echo -e "${RED}✗${NC}"
+    stripColours < "$log" | tail -n 60 | sed 's/^/      /'
+    rm -f "$log"
+    echo "  re-run: ( cd $gate_root && $bin cell check conformance/ )"
+    echo -e "${RED}✗ $(basename "$gate_root"): conformance gate failed${NC}"
+    return 1
+}
+
+# runStandaloneGate [--staged] [--no-conformance] [--jobs <N>] — the gate: the
+# seven stages above.
 runStandaloneGate() {
+    local staged=0 conformance=1 a
+    while [ "$#" -gt 0 ]; do
+        a="$1"; shift
+        case "$a" in
+            --staged) staged=1 ;;
+            --no-conformance) conformance=0 ;;
+            --jobs)
+                [ "$#" -gt 0 ] || fail "gate: --jobs needs a number"
+                gate_jobs_total="$1"; shift ;;
+            --jobs=*) gate_jobs_total="${a#--jobs=}" ;;
+            *) fail "gate: unknown argument '$a'" ;;
+        esac
+    done
+    if [ -n "$gate_jobs_total" ]; then
+        case "$gate_jobs_total" in
+            ''|*[!0-9]*|0) fail "gate: --jobs needs a positive number, got '$gate_jobs_total'" ;;
+        esac
+    fi
     cd "$gate_root"
     SECONDS=0
 
     # 1. staged files.
-    runStagedFilesGate || exit 1
+    if [ "$staged" -eq 1 ]; then
+        runStagedFilesGate || exit 1
+    fi
 
     # 2. the compiler. Absent is a failure, never a skipped gate. It is
     #    exported: a suite that builds fixtures compiles them with the compiler
@@ -468,13 +538,19 @@ runStandaloneGate() {
     # 3. the repository's own stages.
     runRepositoryStagesGate || exit 1
 
-    # 4–6. every cell, every example, every refusal — all run, then the verdict.
+    # 4–7. every cell, every example, every refusal, every conformance cell —
+    #      all run, then the verdict.
     local red=""
     runTestsGate "$bin" || red="$red tests"
     runExamplesGate "$bin" || red="$red examples"
     runRefusalsGate "$bin" || red="$red refusals"
-    if [ -n "$red" ]; then
-        fail "$(basename "$gate_root"): pre-commit gate failed —$red (${SECONDS}s)"
+    if [ "$conformance" -eq 1 ]; then
+        runConformanceGate "$bin" || red="$red conformance"
+    else
+        echo "gate: conformance not run (--no-conformance)"
     fi
-    pass "$(basename "$gate_root"): pre-commit gate passed (${SECONDS}s)"
+    if [ -n "$red" ]; then
+        fail "$(basename "$gate_root"): gate failed —$red (${SECONDS}s)"
+    fi
+    pass "$(basename "$gate_root"): gate passed (${SECONDS}s)"
 }
