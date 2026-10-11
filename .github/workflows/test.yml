@@ -163,6 +163,48 @@ jobs:
             done < <(grep -rl --include=botopink.json '"git"' "$lib" --exclude-dir=.botopinkbuild --exclude-dir=node_modules | sort)
           done
           echo "bpmp install: $n manifest(s)"
+          # `bpmp install` links a manifest's own `git` entries only. The compiler
+          # looks a package's `git` dependencies up in the project's tier and, for
+          # a workspace member, in its workspace root's (decision 483), so the
+          # closure is fetched here: each linked dependency's own `git` entries
+          # are installed in turn, and every link lands under the library root's
+          # `.botopinkbuild/deps/` — the tier the gate step reads whole through
+          # `BOTOPINK_LIB_ROOTS` (a refusal, a cell's scratch copy, a member).
+          for lib in "${LIB_NAME}" ${PATH_DEP_LIBS}; do
+            [ -d "$lib" ] || continue
+            root="$lib/.botopinkbuild/deps"
+            mkdir -p "$root"
+            seen=" "
+            queue=()
+            while IFS= read -r link; do queue+=("$link"); done < <(find "$lib" -type l -path '*/.botopinkbuild/deps/*' -not -path "$root/*" -not -path '*/node_modules/*' | sort)
+            i=0
+            while [ "$i" -lt "${#queue[@]}" ]; do
+              link="${queue[$i]}"
+              i=$((i + 1))
+              name="$(basename "$link")"
+              target="$(cd "$link" && pwd -P)"
+              [ -e "$root/$name" ] || ln -s "$target" "$root/$name"
+              case "$seen" in *" $target "*) continue ;; esac
+              seen="$seen$target "
+              while IFS= read -r manifest; do
+                dir="$(dirname "$manifest")"
+                echo "── bpmp install in $dir (a dependency's own)"
+                (cd "$dir" && bpmp install)
+                for next in "$dir"/.botopinkbuild/deps/*; do
+                  if [ -L "$next" ]; then queue+=("$next"); fi
+                done
+              done < <(grep -rl --include=botopink.json '"git"' "$target" --exclude-dir=.botopinkbuild --exclude-dir=node_modules | sort)
+            done
+            echo "deps of $lib: $(ls "$root" | tr '\n' ' ')"
+          done
+          # The sibling libraries checked out for `path` dependencies carry git
+          # dependencies of their own: the library's root reads them too.
+          for lib in ${PATH_DEP_LIBS}; do
+            for dep in "$lib"/.botopinkbuild/deps/*; do
+              [ -e "$dep" ] || continue
+              [ -e "${LIB_NAME}/.botopinkbuild/deps/$(basename "$dep")" ] || ln -s "$(cd "$dep" && pwd -P)" "${LIB_NAME}/.botopinkbuild/deps/$(basename "$dep")"
+            done
+          done
 
       # The repository's gate with conformance (decisions 470, 477): a red here
       # is reproduced locally, fixed at once and read again — never rerun until
@@ -170,4 +212,8 @@ jobs:
       - name: scripts/gate.sh
         working-directory: botopink-lang/repository/${{ env.LIB_NAME }}
         shell: bash
+        env:
+          # The links the install step wrote, the whole closure — read first by
+          # every project the gate builds, a cell's scratch copy included.
+          BOTOPINK_LIB_ROOTS: ${{ github.workspace }}/botopink-lang/repository/${{ env.LIB_NAME }}/.botopinkbuild/deps
         run: scripts/gate.sh
