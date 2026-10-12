@@ -1,5 +1,5 @@
 # CI for erika: the library's own gate, `scripts/gate.sh`, on the runners the
-# compiler itself is gated on, linux and macos.
+# compiler itself is gated on: linux only.
 #
 # What a row runs is the repository's gate with conformance (decisions 470,
 # 477): the shared runner's stages — the repository's own stages, `botopink test
@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-24.04, macos-14]
+        runner: [ubuntu-24.04]
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout botopink-lang
@@ -88,17 +88,8 @@ jobs:
         with:
           otp-version: ${{ steps.otp.outputs.release }}
 
-      - name: Install Erlang/OTP (macos)
-        if: runner.os == 'macOS'
-        env:
-          OTP: ${{ steps.otp.outputs.release }}
-        run: |
-          brew install "erlang@$OTP" && brew link --force "erlang@$OTP"
-          echo "$(brew --prefix "erlang@$OTP")/bin" >> "$GITHUB_PATH"
-
-      # Decisions 227 and 228: the manifest's release on every row, linux and
-      # macos alike — `erlang@<release>` is keg-only, so its `bin` goes on PATH
-      # above; any other release here fails the job rather than testing against it.
+      # Decisions 227 and 228: the manifest's release on every row; any other
+      # release here fails the job rather than testing against it.
       - name: Assert Erlang/OTP
         shell: bash
         env:
@@ -114,6 +105,24 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '22'
+
+      # The cells run every target they declare, wasm among them: `botopink
+      # cell check` evaluates the generated module with `wasmtime`, so it is on
+      # PATH (the release botopink-lang's own workflow pins).
+      - name: Install wasmtime
+        shell: bash
+        env:
+          WASMTIME_VERSION: v45.0.1
+        run: |
+          set -euo pipefail
+          url="https://github.com/bytecodealliance/wasmtime/releases/download/${WASMTIME_VERSION}/wasmtime-${WASMTIME_VERSION}-x86_64-linux.tar.xz"
+          curl --proto '=https' --tlsv1.2 -sSfL -o /tmp/wasmtime.tar.xz "$url"
+          mkdir -p "$HOME/.wasmtime/bin"
+          tar -xJf /tmp/wasmtime.tar.xz -C /tmp/
+          mv "/tmp/wasmtime-${WASMTIME_VERSION}-x86_64-linux/wasmtime" "$HOME/.wasmtime/bin/"
+          chmod +x "$HOME/.wasmtime/bin/wasmtime"
+          echo "$HOME/.wasmtime/bin" >> "$GITHUB_PATH"
+          "$HOME/.wasmtime/bin/wasmtime" --version
 
       - name: Install Zig
         uses: mlugg/setup-zig@v2
