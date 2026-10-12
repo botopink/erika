@@ -34,7 +34,7 @@ member `modules/erika/`**; `from "erika"` resolves to it, never to the umbrella.
 ```text
 erika/
 ├── AGENTS.md          ← you are here
-├── conformance/       ← the reference and its examples (decision 463): `docs.md` (what this lib provides + the grammar + loading notes) and `modules/<example>/` cells (`botopink cell check conformance/`)
+├── conformance/       ← the reference and its examples (decision 463): `docs.md` (what this lib provides + the grammar + loading notes) and `modules/<example>/` cells (`botopink cell check conformance/`); `conformance/modules/botopink.json` is a workspace whose members are the cells (`"workspaces": ["*"]`, decision 512 of the compiler): it declares what every cell shares — erika as the path dependency `../../modules/erika`, the version — so a cell's own `botopink.json` holds its name alone, and the cells' dependencies share one code cache, `conformance/modules/.botopinkbuild/cache/` (decision 509; `botopink cell check --cold` reads none of it).
 ├── examples.md        ← both forms (fluent + `erika "…"`), runnable
 ├── botopink.json      ← WORKSPACE: name erika · version · description ·
 │                        workspaces ["modules/*", "examples/*"]. No `targets`: a member

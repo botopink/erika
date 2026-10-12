@@ -1,9 +1,1 @@
-{
-  "name": "loading_imports",
-  "version": "0.0.1",
-  "src": "src/",
-  "entry": "main.bp",
-  "dependencies": {
-    "erika": { "path": "../../../modules/erika" }
-  }
-}
+{ "name": "loading_imports" }
