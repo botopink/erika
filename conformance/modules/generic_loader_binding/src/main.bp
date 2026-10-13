@@ -1,0 +1,68 @@
+// generic_loader_binding — the three ways `from "<lib>"` reaches a disk lib.
+//
+// Importing from a non-std library resolved off disk (`from "erika"`) makes its
+// exports usable three ways in the importing module — all generic, none baked
+// into the compiler core:
+//
+//   1. bare value/fn      `import {of}…`    → `of(xs)` unqualified
+//   2. bare template fn   `import {erika}…` → `erika "…"` expands at comptime
+//   3. namespace member   `import {erika}…` → `erika.of(…)` resolves at runtime
+//
+// `of` is an ordinary exported function (a destructured `require`); `erika` is a
+// comptime template fn that shares the lib's name, so the same handle doubles as
+// the lib namespace object for the member form.
+
+import {of, erika} from "erika";
+
+type City(name: string, pop: i32)
+
+val cities = [
+    City(name: "Lyon", pop: 5),
+    City(name: "Paris", pop: 9),
+    City(name: "Nice", pop: 3),
+];
+
+// 1) bare value/fn — `of` is reached unqualified.
+fn adultsByName() -> string {
+    return of(cities)
+        .where({ c -> c.pop >= 5 })
+        .orderBy({ c -> c.name })
+        .select({ c -> c.name })
+        .toArray()
+        .join(", ");
+}
+
+// 2) bare template fn — `erika "…"` captures the SQL-subset string and expands
+//    to the fluent layer at compile time (the expansion calls `of`, in scope).
+fn bigCities() -> string {
+    val names = erika "select name from cities where pop >= 5 order by name asc";
+    return names.join(", ");
+}
+
+// 3) namespace member — `erika.of(…)` resolves through the lib's namespace object.
+fn squaredEvens() -> string {
+    return erika
+        .of([1, 2, 3, 4, 5, 6])
+        .where({ n -> n % 2 == 0 })
+        .select({ n -> n * n })
+        .toArray()
+        .join("-");
+}
+
+pub fn main() {
+    @println(adultsByName()); // Lyon, Paris
+    @println(bigCities()); // Lyon, Paris
+    @println(squaredEvens()); // 4-16-36
+}
+
+test "bare value/fn: of(...) runs unqualified" {
+    assert adultsByName() == "Lyon, Paris";
+}
+
+test "bare template fn: erika \"...\" expands and runs" {
+    assert bigCities() == "Lyon, Paris";
+}
+
+test "namespace member: erika.of(...) resolves at runtime" {
+    assert squaredEvens() == "4-16-36";
+}

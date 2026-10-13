@@ -39,6 +39,11 @@ and `erika-linq`, and never the umbrella. The member's `files` — `root.bp` and
 only modules a consumer sees. There is no embed and no per-lib registry — the compiler core never
 names erika.
 
+Three forms reach the library once it is imported — a bare value `of(xs)`, the bare template
+fn `erika "…"`, and the namespace member `erika.of(…)`:
+
+<!-- example: generic_loader_binding -->
+
 ## The fluent layer — `Query<T>`
 
 Wrap an array with `erika.of(...)`, then chain. Every operator returns a fresh
