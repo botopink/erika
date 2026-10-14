@@ -101,7 +101,7 @@ fn bigCityLabels() -> string {
     return rows
         .map({ r ->
             val #(name, pop) = r;
-            name + ":" + pop.toString();
+            name + ":" + pop.toString()
         })
         .join(", ");
 }
@@ -172,7 +172,7 @@ fn totalsByCity() -> string {
     return rows
         .map({ r ->
             val #(city, total) = r;
-            city + "=" + total.toString();
+            city + "=" + total.toString()
         })
         .join(",");
 }
@@ -184,7 +184,7 @@ fn cityOfOrders() -> string {
     return rows
         .map({ r ->
             val #(total, pop) = r;
-            total.toString() + "/" + pop.toString();
+            total.toString() + "/" + pop.toString()
         })
         .join(",");
 }

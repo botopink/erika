@@ -74,7 +74,7 @@ pub type Query<T>(
         var out: Array<T> = [];
         var taking = true;
         self.items.forEach({ x ->
-            if (taking) if (pred(x)) out = out.append([x]) else taking = false;
+            if (taking) if (pred(x)) out = out.append([x]) else taking = false
         });
         return Query(items: out);
     }
@@ -89,7 +89,7 @@ pub type Query<T>(
                     skipping = false;
                     out = out.append([x]);
                 }
-            } else out = out.append([x]);
+            } else out = out.append([x])
         });
         return Query(items: out);
     }
@@ -129,7 +129,7 @@ pub type Query<T>(
         var out: Array<T> = [];
         self.items.forEach({ x ->
             val fresh = out.indexOf(x) == -1;
-            if (fresh) out = out.append([x]);
+            if (fresh) out = out.append([x])
         });
         return Query(items: out);
     }
@@ -174,7 +174,7 @@ pub type Query<T>(
         self.items.forEach({ x ->
             val k = keyFn(x);
             val fresh = keys.indexOf(k) == -1;
-            if (fresh) keys = keys.append([k]);
+            if (fresh) keys = keys.append([k])
         });
         var groups: Array<Grouping<K, T>> = [];
         keys.forEach({ k ->
@@ -1593,7 +1593,7 @@ test "query: multi-field select projects a tuple per row" {
     val rows = query "select name, pop from queryCities where pop >= 5 order by name asc";
     val labels = rows.map({ r ->
         val #(name, pop) = r;
-        name + ":" + pop.toString();
+        name + ":" + pop.toString()
     });
     assert labels.join(",") == "Lyon:5,Paris:9";
 }
@@ -1735,13 +1735,13 @@ test "query multi-field select over a var listas" {
         .select({ p ->
             val nome = p.nome;
             val preco = p.preco;
-            #(nome, preco);
+            #(nome, preco)
         })
         .toArray();
     assert pares
         .map({ x ->
             val #(nome, preco) = x;
-            nome + ":" + preco.toString();
+            nome + ":" + preco.toString()
         })
         .join(",")
         == "caderno:12,caneta:3";

@@ -99,7 +99,7 @@ test "query: group by yields one row per key with its aggregates" {
     val rows = query "select region, count(*), sum(amount) from sales group by region order by region asc";
     val labels = rows.map({ r ->
         val #(region, n, total) = r;
-        region + ":" + n.toString() + ":" + total.toString();
+        region + ":" + n.toString() + ":" + total.toString()
     });
     assert labels.join(",") == "east:1:7,north:2:16,south:1:4";
 }
@@ -109,7 +109,7 @@ test "query: group by after where, with limit" {
     val labels = rows.map({ r ->
         val #(a, b) = r;
         val c = b ?? -1;
-        a + ":" + c.toString();
+        a + ":" + c.toString()
     });
     assert labels.join(",") == "north:10,east:7";
 }
@@ -123,7 +123,7 @@ test "query: join pairs rows by a condition (inner)" {
     val pairs = query "select owners.owner, cities.pop from owners join cities on owners.city = cities.name where cities.pop >= 5 order by owners.owner asc";
     val labels = pairs.map({ r ->
         val #(owner, pop) = r;
-        owner + ":" + pop.toString();
+        owner + ":" + pop.toString()
     });
     assert labels.join(",") == "ana:9,bob:5,cy:9";
 }
@@ -192,7 +192,7 @@ test "query: holes bind in a join, a group and a limit together" {
     val groups = query "select region, sum(amount) from sales where amount >= ${floor} group by region order by region asc";
     val labels = groups.map({ g ->
         val #(region, total) = g;
-        region + ":" + total.toString();
+        region + ":" + total.toString()
     });
     assert labels.join(",") == "east:7,north:16";
 }
