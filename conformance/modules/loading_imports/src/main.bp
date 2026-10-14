@@ -1,5 +1,5 @@
-import {erika} from "erika";
-import {Query, of} from "erika";
+import {query} from "query";
+import {Query, of} from "query";
 
 fn evens(xs: Array<i32>) -> Query<i32> {
     return of(xs).where({ n -> n % 2 == 0 });

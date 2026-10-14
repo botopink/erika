@@ -1,65 +1,65 @@
-# erika
+# query
 
 `decisions-taken.md` is generated — from the meta repository's `specs/<milestone>/decisions-taken.md` by `scripts/decisions-split.py`; edit it there, never here.
 
-> Path: `repository/erika/`
+> Path: `repository/query/`
 > Parent (workspace): [`../../AGENTS.md`](../../AGENTS.md) · Sibling (core): [`../botopink-lang/AGENTS.md`](../botopink-lang/AGENTS.md)
 > Docs: [`./conformance/docs.md`](conformance/docs.md) · Examples: [`./examples.md`](examples.md)
 > Front: [`../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md`](../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md)
 > (the front that owns this tree in 1.0.10-beta; the v0.beta.7 spec it was born from is gone)
 
 A **C#/LINQ-style query library** for botopink — a fluent, eager, immutable
-`type Query<T>` over `Array<T>`, plus an `erika "…"` SQL-subset **template fn**
+`type Query<T>` over `Array<T>`, plus an `query "…"` SQL-subset **template fn**
 that expands (at comptime) to the same fluent pipeline. It is **pure botopink**:
-zero compiler surface, no decorators, no host backing. erika is the proof that
+zero compiler surface, no decorators, no host backing. query is the proof that
 the generic `from "<lib>"` loader works for an ordinary (non-framework) external
 package, exactly as `rakun` is the proof for a decorator-driven one.
 
-**Not std.** erika shipped *inside* `std` in v0.beta.6 only to dodge the per-lib
+**Not std.** query shipped *inside* `std` in v0.beta.6 only to dodge the per-lib
 import machinery rakun then needed. v0.beta.7 replaced that with one generic
-loader, so erika graduated to its own package: it is reached **only** through
-`import {…} from "erika"` — no `std_pkg_files` entry, no `@embedFile`, no
+loader, so query graduated to its own package: it is reached **only** through
+`import {…} from "query"` — no `std_pkg_files` entry, no `@embedFile`, no
 `modules/compiler-core` mention (the lib-agnostic gate in `build.zig` covers
-`erika` too).
+`query` too).
 
 ## Tree
 
 The repository is a **workspace** (decision 75 of 1.0.10-beta): the root `botopink.json` declares
 members and is never a package — no `src`, `files`, `entry` or `dependencies`, and `botopink
 build/check/run/test` there is the located refusal `botopink.json is a workspace, not a package —
-run this command inside one of its members: erika, erika-test, erika-linq`. Every `modules/*/` and
+run this command inside one of its members: query, query-test, query-linq`. Every `modules/*/` and
 `examples/*/` holding a `botopink.json` is a member, named by its own manifest. The **core is the
-member `modules/erika/`**; `from "erika"` resolves to it, never to the umbrella.
+member `modules/query/`**; `from "query"` resolves to it, never to the umbrella.
 
 ```text
-erika/
+query/
 ├── AGENTS.md          ← you are here
-├── conformance/       ← the reference and its examples (decision 463): `docs.md` (what this lib provides + the grammar + loading notes) and `modules/<example>/` cells (`botopink cell check conformance/`); `conformance/modules/botopink.json` is a workspace whose members are the cells (`"workspaces": ["*"]`, decision 512 of the compiler): it declares what every cell shares — erika as the path dependency `../../modules/erika`, the version — so a cell's own `botopink.json` holds its name alone, and the cells' dependencies share one code cache, `conformance/modules/.botopinkbuild/cache/` (decision 509; `botopink cell check --cold` reads none of it).
-├── examples.md        ← both forms (fluent + `erika "…"`), runnable
-├── botopink.json      ← WORKSPACE: name erika · version · description ·
+├── conformance/       ← the reference and its examples (decision 463): `docs.md` (what this lib provides + the grammar + loading notes) and `modules/<example>/` cells (`botopink cell check conformance/`); `conformance/modules/botopink.json` is a workspace whose members are the cells (`"workspaces": ["*"]`, decision 512 of the compiler): it declares what every cell shares — query as the path dependency `../../modules/query`, the version — so a cell's own `botopink.json` holds its name alone, and the cells' dependencies share one code cache, `conformance/modules/.botopinkbuild/cache/` (decision 509; `botopink cell check --cold` reads none of it).
+├── examples.md        ← both forms (fluent + `query "…"`), runnable
+├── botopink.json      ← WORKSPACE: name query · version · description ·
 │                        workspaces ["modules/*", "examples/*"]. No `targets`: a member
-│                        runs on every target the runner is asked for (erika is green on
+│                        runs on every target the runner is asked for (query is green on
 │                        commonJS and erlang, and `botopink test` has no beam backend).
 │                        Nothing is importable from it.
 ├── modules/
-│   ├── erika/         ← THE CORE — what `from "erika"` gives a consumer
-│   │   ├── botopink.json  name erika · src src/ · entry root.bp · target commonJS ·
-│   │   │                    files ["root.bp", "erika.bp"] · no dependencies
+│   ├── query/         ← THE CORE — what `from "query"` gives a consumer
+│   │   ├── botopink.json  name query · src src/ · entry root.bp · target commonJS ·
+│   │   │                    files ["root.bp", "query.bp"] · no dependencies
 │   │   └── src/
-│   │       ├── root.bp    ← module-tree root: `pub default mod erika;` (public +
-│   │       │                DEFAULT surface — the `import erika` handle)
-│   │       └── erika.bp   ← the whole lib: `type Query<T>` + `Grouping<K,V>` +
-│   │                        constructors + the `pub default fn erika` template fn
+│   │       ├── root.bp    ← module-tree root: `pub default mod query;` (public +
+│   │       │                DEFAULT surface — the `import query` handle)
+│   │       └── query.bp   ← the whole lib: `type Query<T>` + `Grouping<K,V>` +
+│   │                        constructors + the `pub default fn query` template fn
 │   │                        (lexer + parser + dual lowering) + in-file tests
-│   └── erika-test/    ← the `<lib>-test` member (front 95): `assert<Subject>(loc, …)`
+│   └── query-test/    ← the `<lib>-test` member (front 95): `assert<Subject>(loc, …)`
 │       │                helpers, fixtures, builders — EMPTY `pub` surface for now
-│       ├── botopink.json  name erika-test · files ["root.bp"] ·
-│       │                    dependencies { erika: { workspace: true } }
+│       ├── botopink.json  name query-test · files ["root.bp"] ·
+│       │                    dependencies { query: { workspace: true } }
 │       └── src/root.bp    ← one inline `test` proving the core resolves from the member
 ├── examples/
-│   └── erika-linq/    ← member `erika-linq` (an application: entry main.bp, target
+│   └── query-linq/    ← member `query-linq` (an application: entry main.bp, target
 │                        commonJS, no `targets` — 14/14 on commonJS and erlang — depends
-│                        on the core with { "erika": { "workspace": true } })
+│                        on the core with { "query": { "workspace": true } })
 ├── refusals/          ← stage 6 of the gate (front 137): one project per located error of the
 │                        grammar (`botopink check` must refuse it with the lines of its
 │                        `expect.txt`) — holes, `limit`, aggregates, `group by`, `join`; a
@@ -71,23 +71,23 @@ erika/
                          of every example on every declared target
 ```
 
-`modules/erika-test/` is the `<lib>-test` member of `02-packaging` § 5, created empty by
+`modules/query-test/` is the `<lib>-test` member of `02-packaging` § 5, created empty by
 front 95 (15/15 on both rows since 137: the `QueryContext` of its own and the consumer-side cells of the grammar): it stands on std's `asserts` and `snapshots`, re-exports nothing
 from std, and gains its first `assert<Subject>(loc, …)` with the front that needs one.
 
 ## Module tree (`root.bp`) + the package handle
 
-`modules/erika/src/root.bp` is the explicit module-tree root: `pub default mod erika;` declares
+`modules/query/src/root.bp` is the explicit module-tree root: `pub default mod query;` declares
 the single public module AND marks it the package's DEFAULT module (the
-`import erika` handle), so the package builds from the tree, not a deprecated
-blind `src/` scan. A consumer reaches the named items via `import {…} from "erika"`
-(the generic `from "<lib>"` loader), and binds the SQL DSL with `import erika`
-(package-default-dsl): the handle `erika` resolves to the package's
-`pub default fn erika`, so a bare `erika "…"` tagged call expands through the
+`import query` handle), so the package builds from the tree, not a deprecated
+blind `src/` scan. A consumer reaches the named items via `import {…} from "query"`
+(the generic `from "<lib>"` loader), and binds the SQL DSL with `import query`
+(package-default-dsl): the handle `query` resolves to the package's
+`pub default fn query`, so a bare `query "…"` tagged call expands through the
 ordinary template path. (The driver keys the alias by the *handle*, not the fn
-name, so a handler need not share the lib's name; this lib keeps the name `erika`
-so the generic-loader namespace form `erika.of(…)` still resolves through it.)
-Both `root.bp` and `erika.bp` are listed in `modules/erika/botopink.json` `files` — the
+name, so a handler need not share the lib's name; this lib keeps the name `query`
+so the generic-loader namespace form `query.of(…)` still resolves through it.)
+Both `root.bp` and `query.bp` are listed in `modules/query/botopink.json` `files` — the
 `pub default mod` declaration only reaches consumers if its module ships, and a workspace
 member that is a library and lists no `files` is `✗ ships nothing`.
 
@@ -102,7 +102,7 @@ member that is a library and lists no `files` is `✗ ships nothing`.
   replaces the earlier one — still true at `feat`), so the
   predicate variants are spelled out: `count`/`countWhere`, `first`/`firstWhere`,
   `any`/`anyWhere`.
-- **`erika "…"`** is a template fn returning **`@ExprCustom<T>`**: it captures a
+- **`query "…"`** is a template fn returning **`@ExprCustom<T>`**: it captures a
   SQL-subset string as `@Expr<string>` and runs a real three-stage front-end at
   comptime — ① a char-by-char **lexer** (`q.text()` → `Token[]`, every token
   span-aware), ② a recursive-descent-style **parser** (tokens → a `SelectStmt`
@@ -110,12 +110,12 @@ member that is a library and lists no `files` is `✗ ships nothing`.
   the `or < and < comparison` precedence is structural), then ③/④ **dual lowering**
   of the *same* parse. Grammar:
   `select <* | item[, item…]> from <Name> [join <Name> on <a.f> = <b.g>] [where <cond>] [group by <field>] [order by <field> [asc|desc]] [limit <n | hole>]` (an item is a field or `count(*)`/`sum`/`avg`/`min`/`max`).
-  The single-line `erika "…"` and triple-quoted multi-line `erika """ … """` forms
+  The single-line `query "…"` and triple-quoted multi-line `query """ … """` forms
   are equivalent — the lexer treats newlines/tabs as ordinary token boundaries, so
   layout is free (the `html """…"""` sibling).
 - **Holes, rows, aggregates, groups, joins (front 137).** A `${…}` hole stands only as an
   operand of a comparison or as `limit`'s number (anything else is a located `failAt`). The
-  built code binds every hole once (`bindOnce`/`holeBound`, private to `erika.bp`, resolved in
+  built code binds every hole once (`bindOnce`/`holeBound`, private to `query.bp`, resolved in
   this module by 112) and ties its type to the field, literal or earlier hole it meets with a
   *witness column* (`src.map({ row -> row.f })`) typed against the source's element type: the
   checker does not look inside the lambdas given to a `Query` operator, so the tie lives
@@ -136,7 +136,7 @@ member that is a library and lists no `files` is `✗ ships nothing`.
   `q.build(...)`. Behaviour is **byte-for-byte the same** as the pre-refactor
   scanner (single-field projection unwraps, multi-field → a tuple `#(a, b)`, `*` →
   `toArray()`, `=`→`==`, `<>`→`!=`, `and`→`&&`, `'x'`→`"x"`), so runtime/codegen
-  across all backends is unchanged and the in-file + `examples/erika-linq`
+  across all backends is unchanged and the in-file + `examples/query-linq`
   tests stay green.
 - **Lowering ④ → `CustomNode` for tooling (sublanguage-lsp).** Walks the same
   tokens into a generic reference tree: keywords → `keyword`, idents
@@ -151,25 +151,25 @@ member that is a library and lists no `files` is `✗ ships nothing`.
 ## Conventions
 
 - **Pure `.bp`, zero core surface.** The only compiler dependency is the
-  *generic* loader; erika adds no Zig and is named nowhere in `compiler-core`.
-- **Imported, never prelude.** Reached via `from "erika"` — the CLI's generic
+  *generic* loader; query adds no Zig and is named nowhere in `compiler-core`.
+- **Imported, never prelude.** Reached via `from "query"` — the CLI's generic
   loader ([`../botopink-lang/modules/compiler-cli/src/cli/libs.zig`](../botopink-lang/modules/compiler-cli/src/cli/libs.zig))
-  resolves `"dependencies": { "erika": { … } }` to the workspace member
-  `repository/erika/modules/erika/`, shipping `src/erika.bp` as the `erika/erika`
+  resolves `"dependencies": { "query": { … } }` to the workspace member
+  `repository/query/modules/query/`, shipping `src/query.bp` as the `query/query`
   package module. A root contributes every member of a workspace found there,
   **named by its manifest**, so the umbrella never answers the name. No per-lib
   registry, no embed.
-- **Tests live here.** `test { … }` blocks inside `modules/erika/src/erika.bp`, run by
-  `botopink test` from `modules/erika/` — not in the compiler's Zig suites. The
-  cross-module consumer story lives in [`./examples/erika-linq/`](examples/erika-linq/)
+- **Tests live here.** `test { … }` blocks inside `modules/query/src/query.bp`, run by
+  `botopink test` from `modules/query/` — not in the compiler's Zig suites. The
+  cross-module consumer story lives in [`./examples/query-linq/`](examples/query-linq/)
   (`botopink test` green there too).
 - **Every empty array literal is born with its element type** — `var out:
   Array<T> = [];`, never `var out = [];`. botopink-lang decision 8 §1.4 decides
   a type argument only where the value is born, so the bare form declares
   `unknown[]`. The checker does not flag it yet (`val out = [];` checks clean);
   the §1.4 diagnostic is `00 · 01-checker`'s (C-14).
-  Inside the `erika "…"` template body the element type is the tuple the body
-  documents at `modules/erika/src/erika.bp:375` — a token is `#(string, string, Span)`, a
+  Inside the `query "…"` template body the element type is the tuple the body
+  documents at `modules/query/src/query.bp:375` — a token is `#(string, string, Span)`, a
   projected field `#(string, Span)`, a comparison the seven-element tuple
   `buildCmp` answers.
 - Keep this file, `conformance/docs.md`, `examples.md`, and the spec in sync in the same
@@ -177,8 +177,8 @@ member that is a library and lists no `files` is `✗ ships nothing`.
 
 ## Formatting
 
-`botopink format --check` exits 0 in every member — `modules/erika`, `modules/erika-test` and
-`examples/erika-linq` — and at the workspace root. The sources are kept in the canonical form:
+`botopink format --check` exits 0 in every member — `modules/query`, `modules/query-test` and
+`examples/query-linq` — and at the workspace root. The sources are kept in the canonical form:
 decision 61's layout, `00 · C-12`'s width rules (a chain or list that does not fit in 80 columns
 puts every part on its own line, `+4`; a hand-broken one that fits is joined), no `;` after a
 braced `if` / loop / `case` statement (decision 132, step 1) and a trailing comma keeping a list
@@ -186,8 +186,8 @@ open (decision 133).
 
 Every reformat is verified before it is committed, by four measurements: the word-and-literal
 token stream and the comment text of each file are identical before and after; the pass is
-idempotent; the cells stay 34/34 (`modules/erika`), 15/15 (`modules/erika-test`) and 14/14
-(`examples/erika-linq`) on commonJS and erlang; and `examples/erika-linq`'s emitted output is
+idempotent; the cells stay 34/34 (`modules/query`), 15/15 (`modules/query-test`) and 14/14
+(`examples/query-linq`) on commonJS and erlang; and `examples/query-linq`'s emitted output is
 `diff -r` byte-identical on both targets. Re-run `format` here after every formatter construct
 the compiler lands, and commit the output only when those four hold again. A hunk that loses
 information (a comment re-attached to another line, a member reordered) is a formatter row for
@@ -196,17 +196,17 @@ information (a comment re-attached to another line, a member reordered) is a for
 ## Erlang output at the current module-atom shape
 
 The example's `--target erlang` output is one module per `type`, each atom
-`<package>@<path>@@<Decl>` (decision 109): `out/erl/erika@erika.erl`, `erika@root.erl`,
-`erika@erika@@Query.erl`, `erika@erika@@Grouping.erl`, `erika@erika@@ErikaProduct.erl`,
-`erika@erika@@ErikaCity.erl`, and the example's own `erika_linq@main.erl` and
-`erika_linq@main@@{Person,City,Box}.erl`. `botopink run --target erlang` in
-`examples/erika-linq` prints the same six lines the commonJS run prints; the `erlc` warnings
+`<package>@<path>@@<Decl>` (decision 109): `out/erl/query@query.erl`, `query@root.erl`,
+`query@query@@Query.erl`, `query@query@@Grouping.erl`, `query@query@@QueryProduct.erl`,
+`query@query@@QueryCity.erl`, and the example's own `query_linq@main.erl` and
+`query_linq@main@@{Person,City,Box}.erl`. `botopink run --target erlang` in
+`examples/query-linq` prints the same six lines the commonJS run prints; the `erlc` warnings
 (unused `array_range/2` / `array_repeat/2`, unused rebound locals in `Query`) are the
-compiler's emission, not erika's. Nothing in this tree names an atom.
+compiler's emission, not query's. Nothing in this tree names an atom.
 
-## Comptime-eval constraint (why the `erika "…"` parser is written the way it is)
+## Comptime-eval constraint (why the `query "…"` parser is written the way it is)
 
-The `erika "…"` body runs at comptime in the **persistent Erlang runtime** — the
+The `query "…"` body runs at comptime in the **persistent Erlang runtime** — the
 only comptime evaluator (`../botopink-lang/modules/compiler-core/src/comptime/`
 `template_eval.zig` → `runtime/persistent_erl.zig`). `template_eval.zig` lowers
 **only the template fn itself** with `codegen/erlang.zig` `emitComptimeModule`
@@ -230,7 +230,7 @@ What the body may call:
   receiver's runtime kind (`is_binary`/`is_list`/…), so any method a primitive
   type declares works. `s.length()`, `s.len` and `xs.length` all work; `+`
   lowers to `'__bp_add'` (binary concat or arithmetic). A method no primitive
-  and no host function answers is a located error ("the template `erika` calls
+  and no host function answers is a located error ("the template `query` calls
   `.m(…)` … at line:col").
 - **`.at(i)` returns the element, or `null` past the end** — positional access
   needs no counter loop. There is **no `@Option` in the body**: `.at(i).unwrapOr(…)`
@@ -277,7 +277,7 @@ simplify, not required):
 The erlang-codegen gotchas listed in `../botopink-lang/libs/std/AGENTS.md`
 (`+` on strings → `badarith`; `out.push(x)` inside `forEach` discarded) reproduce
 neither in the comptime body nor, in their simple forms (`a + "!"`, `out.push(x)`
-in `forEach`), in a typed erlang-target fn at `feat`; erika needs no workaround
+in `forEach`), in a typed erlang-target fn at `feat`; query needs no workaround
 for them.
 
 ## Status
@@ -293,7 +293,7 @@ for them.
   (botopink-lang 06 N24). A single field projects
   the bare column; `*` returns whole rows. Commas may be attached (`a, b`) or
   spaced (`a , b`) — the lexer treats each as its own token regardless.
-- **Real lexer + parser + dual lowering** (`erika-query-ast`, v0.beta.11) —
+- **Real lexer + parser + dual lowering** (`query-query-ast`, v0.beta.11) —
   **landed.** The old `split`/`join` + `mode` scanner is replaced by a char-by-char
   lexer (`Token[]` with real spans), a parser producing a `SelectStmt` value (the
   `where` clause an `or`-of-`and`-of-comparison tree, so precedence is structural),
@@ -303,34 +303,34 @@ for them.
   comparison`, …); `q.failAt` at the offending token is implemented but not
   asserted in a `.bp` test (a malformed query would abort that module's compile) —
   the generic failAt-at-span path is covered by the sublanguage-lsp Zig fixtures.
-- **Cross-module `erika "…"` (package handle)** — **landed (v0.beta.8, package
-  binding v0.beta.14).** A consumer binds the package with `import erika, {of}
-  from "erika"`: `erika` is the package handle (`ImportDecl.package`) and resolves
+- **Cross-module `query "…"` (package handle)** — **landed (v0.beta.8, package
+  binding v0.beta.14).** A consumer binds the package with `import query, {of}
+  from "query"`: `query` is the package handle (`ImportDecl.package`) and resolves
   to the package's `pub default fn query` (`package-default-dsl`), so
-  `erika "select …"` (and the triple-quoted multi-line form) expand in a consumer
+  `query "select …"` (and the triple-quoted multi-line form) expand in a consumer
   module, resolving the collection in the caller's comptime scope. The driver
   (`comptime.zig`) aliases the handler under the handle and `resolveImports` binds
-  it — generic, not erika-aware. (Before v0.beta.14 the consumer named the fn
-  directly, `import {erika} from "erika"`, relying on a `pub fn erika` whose name
+  it — generic, not query-aware. (Before v0.beta.14 the consumer named the fn
+  directly, `import {query} from "query"`, relying on a `pub fn query` whose name
   matched the lib; that name-matching `pub fn` is now dropped.) Exercised by
-  [`./examples/erika-linq/`](examples/erika-linq/) and
+  [`./examples/query-linq/`](examples/query-linq/) and
   [`../botopink-lang/examples/generic-loader-binding/`](../botopink-lang/examples/generic-loader-binding/).
-  Still zero core surface here: the binding is generic loader work, not erika-aware.
+  Still zero core surface here: the binding is generic loader work, not query-aware.
 
 - **Holes, `limit`, aggregates, `group by`, `join` (front 137, steps 1, 3, 4 in memory)** —
-  **landed.** `erika "… ${expr}"` binds the expression once and ties its type to the
+  **landed.** `query "… ${expr}"` binds the expression once and ties its type to the
   field it meets; `limit 1` answers `?T`, `limit n` an array; `count(*)`/`sum`/`avg`/`min`/`max`,
-  `group by` and an inner `join` lower to the fluent pipeline. Cells: `modules/erika` (holes,
-  in-file), `modules/erika-test` (the rest, from a consumer module), `examples/erika-linq`,
+  `group by` and an inner `join` lower to the fluent pipeline. Cells: `modules/query` (holes,
+  in-file), `modules/query-test` (the rest, from a consumer module), `examples/query-linq`,
   and `refusals/` (the located errors).
 - **`QueryContext<E>`, `QueryTable`, `QueryColumn` (137 step 2, decision 397 (1))** —
-  **declared** in `erika.bp`; `modules/erika-test` implements `QueryContext` with a context of
+  **declared** in `query.bp`; `modules/query-test` implements `QueryContext` with a context of
   its own. The SQL target itself (`from User` on a context, `self.db.query "…"`) waits on
   `01-checker` step 29 and on typed meta being readable in a template body.
 
 ### Recorded gaps
 
-- **`examples/erika-linq` was red on erlang — a botopink-lang defect, not erika's** —
+- **`examples/query-linq` was red on erlang — a botopink-lang defect, not query's** —
   **fixed** in botopink-lang `2e6bb4ac` (`00 · 02-erlang`). Re-measured 2026-09-21 with
   this library untouched: `botopink test --target erlang` in the example goes from
   **1 passed / 8 failed**, every one `{error, badarg}`, to **9 passed / 0 failed**;
@@ -339,7 +339,7 @@ for them.
   **The shape, kept because it outlives the defect.** A method name declared by TWO
   records of an *imported* module used to be resolved by the name alone. `Query<T>` and
   `Grouping<K, V>` both declare `toArray`, so every `.toArray()` a consumer wrote was
-  emitted as `'erika@erika@@Grouping':toArray/1` (today's atom) — `element(3, Self)` applied to a
+  emitted as `'query@query@@Grouping':toArray/1` (today's atom) — `element(3, Self)` applied to a
   `Query` tuple of size 2. The erlang backend already counted dissent for a LOCAL
   collision (`putMethodOwner` clears the entry when a second type claims `name/arity`)
   and, since `fcc0244b`, for a FIELD collision (`uniqueRecordWithField` →
@@ -350,25 +350,25 @@ for them.
   twin of `'__bp_field'/2`. Two `pub` methods sharing a name across two records of one
   imported module is ordinary surface here — `toArray` is the fluent terminal AND how a
   `groupBy` bucket is read (`odds.toArray()`) — so a divergence of this shape is worth
-  measuring on both targets before it is read as erika's.
+  measuring on both targets before it is read as query's.
 
   The example's `"targets": ["commonJS"]` narrowing is gone (1.0.11-beta 00-gate, gate-a: a
   restriction with no host reason is deleted; measured 9/9 on erlang before and after). Until
   botopink-lang's `scripts/restricted-targets.txt` is deleted (`00-gate/113`), its
-  `erika-linq erlang 0` line is stale and `zig build test-libs` reports it so — expected; the
+  `query-linq erlang 0` line is stale and `zig build test-libs` reports it so — expected; the
   library's own gate is `botopink test` per member.
 
-- **`erika "…"` resolves only `val` collections, not `var`.** The template reads
+- **`query "…"` resolves only `val` collections, not `var`.** The template reads
   the caller's *comptime* scope snapshot, which captures immutable `val` bindings
-  only, so `erika "select … from listas"` where `listas` is a `var` does not
-  resolve. The **fluent** form (`of(listas)` / `erika.of(listas)`) is an ordinary
+  only, so `query "select … from listas"` where `listas` is a `var` does not
+  resolve. The **fluent** form (`of(listas)` / `query.of(listas)`) is an ordinary
   runtime call and queries any `var` or `val` array (covered by the
   `select over a var listas …` tests). Making the string form see `var`s is
   comptime scope-snapshot work in core — out of scope here.
-- **Runtime-string form** (`var s = "select …"; erika s`) — pending.
+- **Runtime-string form** (`var s = "select …"; query s`) — pending.
   Needs a generic compiler mechanism (the call site captures a comptime
   scope-snapshot for a runtime `string` view, and the template body re-runs
-  on that runtime payload). No erika-specific code in core. Deferred to a
+  on that runtime payload). No query-specific code in core. Deferred to a
   follow-up.
 - **`average`** takes an `f64` selector (no `i32 → f64` cast exists); `range` /
   `repeat` build their arrays by **recursion** (the `Array.range`/`Array.repeat`
@@ -385,12 +385,12 @@ Two workflows under `.github/workflows/`:
 
 | Workflow      | Trigger                  | What                                                                |
 | ------------- | ------------------------ | ------------------------------------------------------------------- |
-| `test.yml`    | push / PR (feat/master/main) | Rows are the manifests' target set (1.0.11-beta 00-gate, gate-j) on the runners the compiler is gated on: `ubuntu-24.04 × {commonJS, erlang}` (no macos row), every row hard (no `allow_fail`, no `continue-on-error`). No `beam` row (`botopink test` cannot run beam), no windows row (gate-f: botopink-lang has none; it returns with the compiler's). The linux runner is `ubuntu-24.04`; the compiler links against a pinned glibc 2.35 (decision 219, ubuntu-22.04's), so it starts on either runner — the 22.04 floor is the compiler's own workflow's. Erlang/OTP 28 **and** Node 22 are installed on every row (OTP 28 pinned on the runner — the release the root `botopink.json`'s `"otp"` names (`"28"`), read by a step before the installs (decision 228; the compiler refuses any other `erl` on PATH) — `erlef/setup-beam` (decision 227), and a step after it fails the job unless `erl` reports that release) — `zig build install` runs `erlc` and comptime evaluation spawns `erl` whatever the row's target. Bootstrap: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/erika/`, `zig build install`, then one `botopink-lib-test --bin "$BOTOPINK_BIN" --target <t> --strict` from a scratch directory with `BOTOPINK_LIB_ROOTS` naming this repository: the runner discovers this workspace's members — `erika`, `erika-test`, `erika-linq`, one row each (the umbrella has no row, decision 75) — and nothing else, so the verdict is this library's (run from inside the checkout it would add `libs/std` and every sibling under `repository/` as rows). Then the hook's other stages from its own runner, on every row: `runRepositoryStagesGate` (no `repository-stages.sh` here), `runExamplesGate "$bin" <t>` and `runRefusalsGate`. `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `feat`). |
+| `test.yml`    | push / PR (feat/master/main) | Rows are the manifests' target set (1.0.11-beta 00-gate, gate-j) on the runners the compiler is gated on: `ubuntu-24.04 × {commonJS, erlang}` (no macos row), every row hard (no `allow_fail`, no `continue-on-error`). No `beam` row (`botopink test` cannot run beam), no windows row (gate-f: botopink-lang has none; it returns with the compiler's). The linux runner is `ubuntu-24.04`; the compiler links against a pinned glibc 2.35 (decision 219, ubuntu-22.04's), so it starts on either runner — the 22.04 floor is the compiler's own workflow's. Erlang/OTP 28 **and** Node 22 are installed on every row (OTP 28 pinned on the runner — the release the root `botopink.json`'s `"otp"` names (`"28"`), read by a step before the installs (decision 228; the compiler refuses any other `erl` on PATH) — `erlef/setup-beam` (decision 227), and a step after it fails the job unless `erl` reports that release) — `zig build install` runs `erlc` and comptime evaluation spawns `erl` whatever the row's target. Bootstrap: check out this lib + botopink-lang, `rsync self/ → botopink-lang/repository/query/`, `zig build install`, then one `botopink-lib-test --bin "$BOTOPINK_BIN" --target <t> --strict` from a scratch directory with `BOTOPINK_LIB_ROOTS` naming this repository: the runner discovers this workspace's members — `query`, `query-test`, `query-linq`, one row each (the umbrella has no row, decision 75) — and nothing else, so the verdict is this library's (run from inside the checkout it would add `libs/std` and every sibling under `repository/` as rows). Then the hook's other stages from its own runner, on every row: `runRepositoryStagesGate` (no `repository-stages.sh` here), `runExamplesGate "$bin" <t>` and `runRefusalsGate`. `BOTOPINK_LANG_REF` repo variable pins a specific botopink-lang ref (default `feat`). |
 | `tag.yml`    | push to feat/master/main | Reads `version` from `botopink.json`. **feat** → moving `<version>-feat` tag (force-pushed on every push). **master/main** → immutable `<version>` tag (no-op on the same SHA; hard error if the version was not bumped). Uses the built-in `github.token`. |
 
 ## Tagging — "release is a manifest change"
 
-`bpmp install erika` resolves through the tags `tag.yml` produces. To
+`bpmp install query` resolves through the tags `tag.yml` produces. To
 publish a new stable release:
 
 1. Bump `version` in `botopink.json` to the new SemVer.
@@ -402,7 +402,7 @@ loudly with a "bump version in botopink.json to publish a new release"
 message. This is intentional — it forces every release to be visible in
 the manifest history.
 
-To preview unreleased work, set `requires.erika = "feat"` in the
+To preview unreleased work, set `requires.query = "feat"` in the
 consuming project's `botopink.json` and run `bpmp sync` — bpmp will
 resolve to the moving `<version>-feat` tag.
 
@@ -410,7 +410,7 @@ resolve to the moving `<version>-feat` tag.
 
 - The front that owns this tree (its steps, gate and open rows) →
   [`../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md`](../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md).
-- The generic loader erika is a client of → [`../botopink-lang/modules/compiler-cli/src/cli/libs.zig`](../botopink-lang/modules/compiler-cli/src/cli/AGENTS.md).
+- The generic loader query is a client of → [`../botopink-lang/modules/compiler-cli/src/cli/libs.zig`](../botopink-lang/modules/compiler-cli/src/cli/AGENTS.md).
 - The decorator-driven sibling client → [`../rakun/AGENTS.md`](../rakun/AGENTS.md).
 
 ## Local gate
@@ -453,12 +453,12 @@ none with a flag, variable or list that turns it off:
    **fails**, naming `zig build install` and `BOTOPINK_BIN` as the way out
    (`requireBotopink`; gate-i). The path is exported as `BOTOPINK_BIN`;
 3. **repository stages** — `scripts/git-hooks/repository-stages.sh`, when a
-   repository tracks one. erika has none;
+   repository tracks one. query has none;
 4. **tests** — `botopink test --target <t>` in every workspace member (every
-   directory the root manifest's `workspaces` patterns expand to: `modules/erika`,
-   `modules/erika-test`, `examples/erika-linq`) on every target its manifest
+   directory the root manifest's `workspaces` patterns expand to: `modules/query`,
+   `modules/query-test`, `examples/query-linq`) on every target its manifest
    declares — the member's `targets`, else the workspace's, else the two
-   `botopink test` runs. No erika manifest declares `targets`, so that is
+   `botopink test` runs. No query manifest declares `targets`, so that is
    commonJS **and** erlang for all three: 6 cells (the umbrella compiles
    nothing, so `botopink test` at the root is the workspace refusal and is
    never called);
@@ -476,24 +476,24 @@ none with a flag, variable or list that turns it off:
 Stages 1–3 stop the gate at the first red. Stages 4–6 all run: every red cell
 is listed with the tail of its output and a re-run line, and the gate fails at
 the end — one run tells every red. Measured 2026-10-01 with the compiler built
-from botopink-lang `29cfffc8`: 6/6 cells (`erika` 34/34, `erika-test` 15/15,
-`erika-linq` 14/14, each on both targets; 137), 2/2 builds, 20 refusal cases (`refusals/`), exit 0 in 12 s (measured before 137). Never
+from botopink-lang `29cfffc8`: 6/6 cells (`query` 34/34, `query-test` 15/15,
+`query-linq` 14/14, each on both targets; 137), 2/2 builds, 20 refusal cases (`refusals/`), exit 0 in 12 s (measured before 137). Never
 commit with `--no-verify`; fix the red instead.
 
-The compiler-side twin of this gate is `zig build test-libs -- --lib erika --target <t>` (and
-`--lib erika-linq` for the example's cell), run from `repository/botopink-lang/`. **From a
+The compiler-side twin of this gate is `zig build test-libs -- --lib query --target <t>` (and
+`--lib query-linq` for the example's cell), run from `repository/botopink-lang/`. **From a
 `.tasks/<name>/` worktree of the meta repository it refuses**: the runner walks up every
 ancestor's `repository/` and finds this library twice — the worktree's copy and the main
-checkout's — and a name that two libraries declare is a located refusal, not a pick (*"erika" is
+checkout's — and a name that two libraries declare is a located refusal, not a pick (*"query" is
 declared by two libraries … rename one of them*; decision 67, no flag lifts it). Run the runner
 binary from a directory outside the checkout with the worktree as the only root instead:
 `botopink-lib-test --bin <worktree>/repository/botopink-lang/zig-out/bin/botopink --lib-root
-<worktree>/repository --lib erika --target <t> --include-unsupported` — the same cell, one root.
+<worktree>/repository --lib query --target <t> --include-unsupported` — the same cell, one root.
 
 There is no list of examples allowed to fail: an example that does not build
 fails the gate (gate-i deleted the `known-broken-examples.txt` branch).
 `scripts/git-hooks/pre-commit` and `scripts/git-hooks/lib/runner-standalone.sh`
-are one text in the five library repositories (emilia, erika, jhonstart, onze,
+are one text in the five library repositories (emilia, query, jhonstart, onze,
 rakun): the meta repository's `hook-integrity` workflow compares the bytes
 (its check 4), so a change to either lands in all five together. What only
 one repository checks lives in that repository's

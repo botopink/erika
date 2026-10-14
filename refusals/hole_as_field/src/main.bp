@@ -1,4 +1,4 @@
-import erika from "erika";
+import query from "query";
 
 type Person(name: string, age: i32)
 
@@ -6,6 +6,6 @@ val people = [Person(name: "Ann", age: 30)];
 
 fn main() {
     val col = "name";
-    val r = erika "select ${col} from people";
+    val r = query "select ${col} from people";
     @print(r.length);
 }

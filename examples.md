@@ -1,21 +1,21 @@
-# erika — examples
+# query — examples
 
-> Path: `repository/erika/`
+> Path: `repository/query/`
 > Sibling (AGENTS): [`./AGENTS.md`](AGENTS.md) · Docs: [`./conformance/docs.md`](conformance/docs.md)
 > Parent (workspace): [`../../AGENTS.md`](../../AGENTS.md)
 
-All examples assume `erika` is a declared dependency — the object form, one source per entry:
-`"dependencies": { "erika": { "git": "https://github.com/botopink/erika.git", "branch": "feat" } }`
-in `botopink.json`, or `{ "erika": { "workspace": true } }` from a sibling member of erika's own
-workspace (which is what [`./examples/erika-linq/`](examples/erika-linq/) uses).
+All examples assume `query` is a declared dependency — the object form, one source per entry:
+`"dependencies": { "query": { "git": "https://github.com/botopink/query.git", "branch": "feat" } }`
+in `botopink.json`, or `{ "query": { "workspace": true } }` from a sibling member of query's own
+workspace (which is what [`./examples/query-linq/`](examples/query-linq/) uses).
 
 ## The fluent layer
 
-Wrap an array in a `Query<T>` with `erika.of(...)`, then chain fluent operators.
+Wrap an array in a `Query<T>` with `query.of(...)`, then chain fluent operators.
 Everything is eager and immutable — each operator returns a fresh `Query`.
 
 ```bp
-import {erika} from "erika";
+import {query} from "query";
 
 type Person(name: string, age: i32)
 
@@ -26,7 +26,7 @@ fn main() {
         Person(name: "Cy",  age: 22),
     ];
 
-    val adults = erika.of(people)
+    val adults = query.of(people)
         .where({ p -> p.age >= 18 })
         .orderBy({ p -> p.name })
         .select({ p -> p.name })
@@ -39,15 +39,15 @@ fn main() {
 Aggregations, grouping, flattening and element terminals:
 
 ```bp
-val total    = erika.range(1, 101).where({ n -> n % 2 == 0 }).sum({ n -> n }); // 2550
-val byParity = erika.of([1, 2, 3, 4]).groupBy({ n -> n % 2 });                 // Query<Grouping<i32, i32>>
-val firstBig = erika.of([1, 5, 9]).firstWhere({ n -> n > 4 });                 // ?i32 → 5
-val pairs    = erika.of([1, 2, 3]).selectMany({ n -> [n, n * 10] }).toArray(); // [1, 10, 2, 20, 3, 30]
+val total    = query.range(1, 101).where({ n -> n % 2 == 0 }).sum({ n -> n }); // 2550
+val byParity = query.of([1, 2, 3, 4]).groupBy({ n -> n % 2 });                 // Query<Grouping<i32, i32>>
+val firstBig = query.of([1, 5, 9]).firstWhere({ n -> n > 4 });                 // ?i32 → 5
+val pairs    = query.of([1, 2, 3]).selectMany({ n -> [n, n * 10] }).toArray(); // [1, 10, 2, 20, 3, 30]
 ```
 
-## The `erika "…"` query string
+## The `query "…"` query string
 
-`erika` is also a **template function**: a SQL-subset query string is parsed at
+`query` is also a **template function**: a SQL-subset query string is parsed at
 compile time and expanded into the fluent pipeline. The grammar (keywords
 lowercase) is:
 
@@ -70,20 +70,20 @@ val cities = [
 //   of(cities).where({ row -> row.pop >= 5 })
 //             .orderBy({ row -> row.name })
 //             .select({ row -> row.name }).toArray()
-val names = erika "select name from cities where pop >= 5 order by name asc";
+val names = query "select name from cities where pop >= 5 order by name asc";
 // → ["Lyon", "Paris"]
 
 // `select a, b` projects a tuple per row → Array<#(name: string, pop: i32)>
-val rows = erika "select name, pop from cities where pop >= 5 order by name asc";
+val rows = query "select name, pop from cities where pop >= 5 order by name asc";
 val labels = rows.map({ r -> val #(name, pop) = r; name + ":" + pop.toString() });
 // → ["Lyon:5", "Paris:9"]
 
 // `select *` returns whole rows → Array<City>
-val all = erika "select * from cities";
+val all = query "select * from cities";
 
 // the triple-quoted multi-line form (the `html """…"""` sibling) is authored the
 // same way — newlines and tabs are normalized to spaces before tokenizing:
-val bigRows = erika """
+val bigRows = query """
     select name, pop from cities
     where pop >= 5
     order by name asc
@@ -104,22 +104,22 @@ val orders = [
 
 // a hole is a bound value (any expression, evaluated once, typed against the field)
 fn atLeast(min: i32) -> Array<string> {
-    return erika "select name from cities where pop >= ${min} order by name asc";
+    return query "select name from cities where pop >= ${min} order by name asc";
 }
 
 // `limit n` cuts the rows; `limit 1` answers one row, `?T`
-val top = erika "select name from cities order by pop desc limit 1";   // ?string → "Paris"
-val two = erika "select name from cities order by name asc limit 2";   // ["Lyon", "Nice"]
+val top = query "select name from cities order by pop desc limit 1";   // ?string → "Paris"
+val two = query "select name from cities order by name asc limit 2";   // ["Lyon", "Nice"]
 
 // aggregates: one value without `group by`
-val n = erika "select count(*) from orders where total > 5";           // 3
+val n = query "select count(*) from orders where total > 5";           // 3
 
 // `group by`: a tuple per key
-val sums = erika "select city, sum(total) from orders group by city order by city asc";
+val sums = query "select city, sum(total) from orders group by city order by city asc";
 // [#("Lyon", 16), #("Nice", 7), #("Paris", 4)]
 
 // `join` (inner): fields are qualified; a row is the matched pair
-val pairs = erika "select orders.total, cities.pop from orders join cities on orders.city = cities.name order by orders.total asc";
+val pairs = query "select orders.total, cities.pop from orders join cities on orders.city = cities.name order by orders.total asc";
 ```
 
 ## `select` over a `var listas = [..]`
@@ -138,21 +138,21 @@ fn main() {
     ];
 
     // select the names of the pricier items
-    val caros = erika.of(listas)
+    val caros = query.of(listas)
         .where({ p -> p.preco >= 12 })
         .select({ p -> p.nome })
         .toArray();                          // ["caderno", "mochila"]
 
     // a `var` can be reassigned, then re-queried
     listas = listas.append([Produto(nome: "lapis", preco: 2)]);
-    val baratos = erika.of(listas)
+    val baratos = query.of(listas)
         .where({ p -> p.preco < 12 })
         .orderBy({ p -> p.preco })
         .select({ p -> p.nome })
         .toArray();                          // ["lapis", "caneta"]
 
     // multi-field projection → a tuple per row
-    val pares = erika.of(listas)
+    val pares = query.of(listas)
         .select({ p -> val nome = p.nome; val preco = p.preco; #(nome, preco) })
         .toArray();                          // [#("caderno", 12), …]
 }
@@ -162,23 +162,23 @@ Scalars work the same way:
 
 ```bp
 var nums = [1, 2, 3, 4, 5, 6];
-val paresPorDez = erika.of(nums).where({ n -> n % 2 == 0 }).select({ n -> n * 10 }).toArray();
+val paresPorDez = query.of(nums).where({ n -> n % 2 == 0 }).select({ n -> n * 10 }).toArray();
 // [20, 40, 60]
 ```
 
-> **`erika "…"` needs a `val`, not a `var`.** The SQL template resolves its
+> **`query "…"` needs a `val`, not a `var`.** The SQL template resolves its
 > collection from the caller's *comptime* scope snapshot, which only captures
-> immutable `val` bindings. `erika "select … from listas"` where `listas` is a
+> immutable `val` bindings. `query "select … from listas"` where `listas` is a
 > `var` does not resolve — use a `val` for the string form, or the fluent
-> `erika.of(listas)` (above) for a `var`.
+> `query.of(listas)` (above) for a `var`.
 
 > **Runnable example.** A consumer project lives at
-> [`./examples/erika-linq/`](examples/erika-linq/): it imports
-> `{of, erika} from "erika"` and exercises the fluent layer **and** both the
-> single-line `erika "…"` and triple-quoted `erika """…"""` SQL forms
-> cross-module (`botopink test` green). The bare imported `erika` template fn now
+> [`./examples/query-linq/`](examples/query-linq/): it imports
+> `{of, query} from "query"` and exercises the fluent layer **and** both the
+> single-line `query "…"` and triple-quoted `query """…"""` SQL forms
+> cross-module (`botopink test` green). The bare imported `query` template fn now
 > binds in a consumer's scope — the generic-loader-binding keystone (v0.beta.8)
-> closed the old `unbound variable 'erika'` limit.
+> closed the old `unbound variable 'query'` limit.
 
 ## See also
 

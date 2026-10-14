@@ -6,6 +6,6 @@
   "entry": "main.bp",
   "target": "erlang",
   "dependencies": {
-    "erika": { "path": "../../modules/erika" }
+    "query": { "path": "../../modules/query" }
   }
 }

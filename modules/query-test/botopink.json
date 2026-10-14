@@ -1,0 +1,16 @@
+{
+  "name": "query-test",
+  "version": "0.0.1",
+  "description": "query-test — test helpers for query: assert<Subject>(loc, …) snapshot helpers over a query's rows and the `query \"…\"` lowering, filled by query's fronts — commonJS and erlang",
+  "src": "src/",
+  "entry": "root.bp",
+  "target": "commonJS",
+  "files": [
+    "root.bp"
+  ],
+  "dependencies": {
+    "query": {
+      "workspace": true
+    }
+  }
+}

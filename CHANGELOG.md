@@ -1,7 +1,8 @@
-# erika · CHANGELOG
+# query · CHANGELOG
 
 ## Unreleased
 
+- **renamed `query`** (front 165, decision mono-a)
 - **Both members reformatted to today's canonical form** (decisions 132 and 133, C-12's width
   rules): `modules/erika/src/erika.bp` drops the `;` after its braced `if` / `for` statements and
   breaks the `if … else …` values that exceed 80 columns; `examples/erika-linq/src/main.bp` is

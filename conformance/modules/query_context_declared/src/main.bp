@@ -1,4 +1,4 @@
-import {QueryColumn, QueryTable, QueryContext} from "erika";
+import {QueryColumn, QueryTable, QueryContext} from "query";
 
 pub fn main() {
     val table = QueryTable(name: "users", columns: [QueryColumn(field: "name", column: "user_name")]);

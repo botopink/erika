@@ -1,0 +1,12 @@
+{
+  "name": "query",
+  "version": "0.0.1",
+  "description": "query core — the fluent, eager, immutable Query<T> over Array<T> plus the comptime `query \"…\"` SQL-subset template fn — commonJS and erlang",
+  "src": "src/",
+  "entry": "root.bp",
+  "target": "commonJS",
+  "files": [
+    "root.bp",
+    "query.bp"
+  ]
+}

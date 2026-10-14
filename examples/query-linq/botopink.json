@@ -1,0 +1,13 @@
+{
+  "name": "query-linq",
+  "version": "0.0.1",
+  "description": "query showcase — the fluent Query<T> layer and both `query \"…\"` SQL forms consumed cross-module; mirrors examples.md",
+  "src": "src/",
+  "entry": "main.bp",
+  "target": "commonJS",
+  "dependencies": {
+    "query": {
+      "workspace": true
+    }
+  }
+}

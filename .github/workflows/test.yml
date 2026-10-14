@@ -1,4 +1,4 @@
-# CI for erika: the library's own gate, `scripts/gate.sh`, on the runners the
+# CI for query: the library's own gate, `scripts/gate.sh`, on the runners the
 # compiler itself is gated on: linux only.
 #
 # What a row runs is the repository's gate with conformance (decisions 470,
@@ -17,7 +17,7 @@
 # the compiler's own workflow gates the 22.04 floor, this row runs on 24.04.
 #
 # Bootstrap: check out botopink-lang (feat) and place this library under
-# `botopink-lang/repository/erika/`, build the compiler, then FETCH THE
+# `botopink-lang/repository/query/`, build the compiler, then FETCH THE
 # DEPENDENCIES (front 163 s8): every `botopink.json` that declares a `git`
 # dependency gets `bpmp install` run beside it, which clones the dependency at
 # the manifest's branch into the package store and links it under that
@@ -44,7 +44,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 env:
-  LIB_NAME: erika
+  LIB_NAME: query
   BOTOPINK_LANG_REPO: botopink/botopink-lang
   # Libraries checked out beside this one for `path` dependencies.
   PATH_DEP_LIBS: ""

@@ -1,0 +1,11 @@
+//// The `query` package — module-tree root.
+////
+//// `query` is a single-module library: `query.bp` carries the whole lib (the
+//// fluent `Query<T>` + the `query "…"` SQL-subset template fn). Declaring it
+//// `pub default mod` makes it the package's public surface AND its DEFAULT
+//// module: a consumer reaches the named items via `import {…} from "query"` (the
+//// generic `from "<lib>"` loader), and binds the package handle with `import
+//// query`, which resolves to the module's `pub default fn` (the `query` handler
+//// that powers the `query "…"` SQL DSL) — no name-matching `pub fn query` needed.
+
+pub default mod query;

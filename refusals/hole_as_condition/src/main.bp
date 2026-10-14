@@ -1,4 +1,4 @@
-import erika from "erika";
+import query from "query";
 
 type Person(name: string, age: i32)
 
@@ -6,6 +6,6 @@ val people = [Person(name: "Ann", age: 30)];
 
 fn main() {
     val flag = true;
-    val r = erika "select name from people where ${flag}";
+    val r = query "select name from people where ${flag}";
     @print(r.length);
 }

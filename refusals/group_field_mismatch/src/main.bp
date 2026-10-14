@@ -1,4 +1,4 @@
-import erika from "erika";
+import query from "query";
 
 type City(name: string, pop: i32)
 
@@ -9,6 +9,6 @@ val cities = [City(name: "Lyon", pop: 5)];
 val owners = [Owner(owner: "ana", city: "Lyon")];
 
 fn main() {
-    val r = erika "select pop, count(*) from cities group by name";
+    val r = query "select pop, count(*) from cities group by name";
     @print(r);
 }

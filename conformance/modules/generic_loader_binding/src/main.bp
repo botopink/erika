@@ -1,18 +1,18 @@
 // generic_loader_binding — the three ways `from "<lib>"` reaches a disk lib.
 //
-// Importing from a non-std library resolved off disk (`from "erika"`) makes its
+// Importing from a non-std library resolved off disk (`from "query"`) makes its
 // exports usable three ways in the importing module — all generic, none baked
 // into the compiler core:
 //
 //   1. bare value/fn      `import {of}…`    → `of(xs)` unqualified
-//   2. bare template fn   `import {erika}…` → `erika "…"` expands at comptime
-//   3. namespace member   `import {erika}…` → `erika.of(…)` resolves at runtime
+//   2. bare template fn   `import {query}…` → `query "…"` expands at comptime
+//   3. namespace member   `import {query}…` → `query.of(…)` resolves at runtime
 //
-// `of` is an ordinary exported function (a destructured `require`); `erika` is a
+// `of` is an ordinary exported function (a destructured `require`); `query` is a
 // comptime template fn that shares the lib's name, so the same handle doubles as
 // the lib namespace object for the member form.
 
-import {of, erika} from "erika";
+import {of, query} from "query";
 
 type City(name: string, pop: i32)
 
@@ -32,16 +32,16 @@ fn adultsByName() -> string {
         .join(", ");
 }
 
-// 2) bare template fn — `erika "…"` captures the SQL-subset string and expands
+// 2) bare template fn — `query "…"` captures the SQL-subset string and expands
 //    to the fluent layer at compile time (the expansion calls `of`, in scope).
 fn bigCities() -> string {
-    val names = erika "select name from cities where pop >= 5 order by name asc";
+    val names = query "select name from cities where pop >= 5 order by name asc";
     return names.join(", ");
 }
 
-// 3) namespace member — `erika.of(…)` resolves through the lib's namespace object.
+// 3) namespace member — `query.of(…)` resolves through the lib's namespace object.
 fn squaredEvens() -> string {
-    return erika
+    return query
         .of([1, 2, 3, 4, 5, 6])
         .where({ n -> n % 2 == 0 })
         .select({ n -> n * n })
@@ -59,10 +59,10 @@ test "bare value/fn: of(...) runs unqualified" {
     assert adultsByName() == "Lyon, Paris";
 }
 
-test "bare template fn: erika \"...\" expands and runs" {
+test "bare template fn: query \"...\" expands and runs" {
     assert bigCities() == "Lyon, Paris";
 }
 
-test "namespace member: erika.of(...) resolves at runtime" {
+test "namespace member: query.of(...) resolves at runtime" {
     assert squaredEvens() == "4-16-36";
 }

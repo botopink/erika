@@ -1,31 +1,31 @@
-# erika — C#/LINQ-style queries
+# query — C#/LINQ-style queries
 
-> Path: `repository/erika/`
+> Path: `repository/query/`
 > Sibling (AGENTS): [`./AGENTS.md`](../AGENTS.md)
 > Examples: [`./examples.md`](../examples.md)
 > Parent (workspace): [`../../AGENTS.md`](../../../AGENTS.md)
 > Front: [`../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md`](../../../specs/1.0.10-beta/00-compiler-carry-over/09-ecosystem-residuals/README.md)
 
-`erika` is botopink's answer to C#'s **LINQ**: a fluent query vocabulary over
-`Array<T>`, plus a SQL-subset `erika "…"` template. It is **opt-in** — reached via
-`from "erika"`, never auto-loaded into the type environment — and **pure
-botopink**: the whole library is `modules/erika/src/erika.bp`, with zero compiler surface.
+`query` is botopink's answer to C#'s **LINQ**: a fluent query vocabulary over
+`Array<T>`, plus a SQL-subset `query "…"` template. It is **opt-in** — reached via
+`from "query"`, never auto-loaded into the type environment — and **pure
+botopink**: the whole library is `modules/query/src/query.bp`, with zero compiler surface.
 
 ## Loading
 
-`repository/erika/` is a **workspace** (`"workspaces": ["modules/*", "examples/*"]`); the library
-is its member `modules/erika/`, and `from "erika"` resolves to that member, never to the umbrella.
+`repository/query/` is a **workspace** (`"workspaces": ["modules/*", "examples/*"]`); the library
+is its member `modules/query/`, and `from "query"` resolves to that member, never to the umbrella.
 Declare it as a dependency and import what you need:
 
 ```jsonc
 // botopink.json — `dependencies` is the object form, one source per entry
 { "name": "myapp", "target": "commonJS", "src": "src/",
-  "dependencies": { "erika": { "git": "https://github.com/botopink/erika.git", "branch": "feat" } } }
+  "dependencies": { "query": { "git": "https://github.com/botopink/query.git", "branch": "feat" } } }
 ```
 
 ```jsonc
-// …or, for a sibling member of erika's own workspace:
-{ "dependencies": { "erika": { "workspace": true } } }
+// …or, for a sibling member of query's own workspace:
+{ "dependencies": { "query": { "workspace": true } } }
 ```
 
 <!-- example: loading_imports -->
@@ -34,19 +34,19 @@ The loader walks up from `cwd` and, at each ancestor, considers these roots (nea
 ancestor itself when its `botopink.json` is a workspace, `repository/botopink-lang/libs`,
 `repository/`, a legacy flat `libs/`, then `.botopinkbuild/deps/`. A root contributes every
 immediate child holding a `botopink.json` **and every member of a workspace found there, named by
-its own manifest** — so `repository/` contributes `erika` (the member `repository/erika/modules/erika/`)
-and `erika-linq`, and never the umbrella. The member's `files` — `root.bp` and `erika.bp` — are the
+its own manifest** — so `repository/` contributes `query` (the member `repository/query/modules/query/`)
+and `query-linq`, and never the umbrella. The member's `files` — `root.bp` and `query.bp` — are the
 only modules a consumer sees. There is no embed and no per-lib registry — the compiler core never
-names erika.
+names query.
 
 Three forms reach the library once it is imported — a bare value `of(xs)`, the bare template
-fn `erika "…"`, and the namespace member `erika.of(…)`:
+fn `query "…"`, and the namespace member `query.of(…)`:
 
 <!-- example: generic_loader_binding -->
 
 ## The fluent layer — `Query<T>`
 
-Wrap an array with `erika.of(...)`, then chain. Every operator returns a fresh
+Wrap an array with `query.of(...)`, then chain. Every operator returns a fresh
 `Query` (eager, immutable); terminals return a scalar, `?T`, or `Array<T>`.
 
 | Group | Operators |
@@ -63,9 +63,9 @@ Wrap an array with `erika.of(...)`, then chain. Every operator returns a fresh
 `selectMany` flattens: the per-item selector returns an `Array<U>` and the
 results are concatenated into one `Query<U>`.
 
-## The `erika "…"` query string
+## The `query "…"` query string
 
-`erika` is also a **template function**: a SQL-subset string is parsed at comptime
+`query` is also a **template function**: a SQL-subset string is parsed at comptime
 and expanded into the fluent pipeline. Keywords are lowercase. Grammar:
 
 ```text
@@ -114,13 +114,13 @@ The referenced collection is resolved against the caller's top-level scope. The
 expansion emits **unqualified** fluent source
 (`of(Name).where(…).orderBy(…).select(…).toArray()`), so it resolves wherever
 `of` / the collection are in scope. The query may be written single-line
-(`erika "…"`) or triple-quoted multi-line (`erika """ … """`) — the lexer scans
+(`query "…"`) or triple-quoted multi-line (`query """ … """`) — the lexer scans
 character-by-character and treats newlines and tabs as ordinary token boundaries,
 so the two forms parse identically.
 
 ### Front-end (lexer → parser → dual lowering)
 
-`erika "…"` runs a real three-stage front-end at comptime — no string
+`query "…"` runs a real three-stage front-end at comptime — no string
 `split`/`join` scanning:
 
 1. **lexer** — a char-by-char scanner turns the query into a `Token[]`, each token
@@ -138,35 +138,35 @@ so the two forms parse identically.
 
 ## The database target — `QueryContext`, `QueryTable` (decision 397)
 
-erika names no persistence library (decision 113). It declares what the SQL target needs
+query names no persistence library (decision 113). It declares what the SQL target needs
 and a persistence library (dbcontext's `DbContext`, decision 398) implements and records:
 
 <!-- example: query_context_declared -->
 
-`E` is the implementor's own error, so erika names no library's.
+`E` is the implementor's own error, so query names no library's.
 
 ## Known gaps
 
 - **A query inside a `type` method, and as a destructuring initializer.** The compiler
-  does not expand a template call written in a `type` method's body (`return erika "…";`
-  there stays an unbound `erika`) or in `val #(a, b) = erika "…"`; write the query in a
+  does not expand a template call written in a `type` method's body (`return query "…";`
+  there stays an unbound `query`) or in `val #(a, b) = query "…"`; write the query in a
   function and destructure its result (`01-checker` step 29's reach).
 - **The declared answer.** The query decides whether it answers `?T` or `T[]` (see
   `limit`); the compiler does not yet compare the expansion's type with the declared one
-  (`val n: i32 = erika "select name from cities"` is accepted).
+  (`val n: i32 = query "select name from cities"` is accepted).
 - **The SQL target** — `from User` over an entity on a `QueryContext`, `self.db.query "…"`
   and `#[query "…"]` wait on `01-checker` step 29 (the template method and the template
   annotation) and on reading typed meta in a template body.
-- **`erika "…"` resolves only `val` collections, not `var`** — the template reads
+- **`query "…"` resolves only `val` collections, not `var`** — the template reads
   the caller's comptime scope snapshot, which captures immutable `val` bindings
-  only. The fluent `of(listas)` / `erika.of(listas)` form queries any `var`/`val`.
+  only. The fluent `of(listas)` / `query.of(listas)` form queries any `var`/`val`.
 
-> Cross-module `erika "…"` resolves through the package-handle binding — a
-> consumer writes `import erika, {of} from "erika"`, and the `erika` handle
+> Cross-module `query "…"` resolves through the package-handle binding — a
+> consumer writes `import query, {of} from "query"`, and the `query` handle
 > binds the package's `pub default fn` (`package-default-dsl`, v0.beta.14;
 > the underlying bare-imported template-fn binding landed earlier in
 > v0.beta.8 via the generic-loader-binding keystone). A runnable consumer
-> lives at [`./examples/erika-linq/`](../examples/erika-linq/).
+> lives at [`./examples/query-linq/`](../examples/query-linq/).
 
 ## See also
 

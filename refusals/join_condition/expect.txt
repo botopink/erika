@@ -1,2 +1,2 @@
-error: erika: a join condition is 'a.f = b.g'
+error: query: a join condition is 'a.f = b.g'
   --> src/main.bp:12:68

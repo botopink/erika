@@ -1,4 +1,4 @@
-// erika-linq — querying lists with the erika LINQ layer + the iterator methods.
+// query-linq — querying lists with the query LINQ layer + the iterator methods.
 //
 // `of(list)` wraps an `Array<T>` (a list) in a fluent `Query<T>`; the query
 // operators (`where`/`select`/`orderBy`/…) each return a fresh `Query`, and
@@ -6,17 +6,17 @@
 // so the iterator methods (`map`/`filter`/`fold`/`join`) compose right after.
 // `.join(sep)` is the terminal that renders an iterator to a string.
 //
-// `erika "…"` is the same handle as an embedded SQL sub-language: the quoted text
+// `query "…"` is the same handle as an embedded SQL sub-language: the quoted text
 // is parsed at compile time and expanded into the fluent pipeline, resolving the
 // collection name (`cities`) in this caller's scope — exactly how `html` resolves
-// its builders. The single-line `erika "…"` and triple-quoted `erika """…"""`
+// its builders. The single-line `query "…"` and triple-quoted `query """…"""`
 // forms are the short and multi-line authoring surfaces.
 //
-// Reached through the generic loader: `import erika, {of} from "erika"` — the
-// package handle `erika` binds the package's `pub default fn` (the SQL DSL); `of`
+// Reached through the generic loader: `import query, {of} from "query"` — the
+// package handle `query` binds the package's `pub default fn` (the SQL DSL); `of`
 // is a named export (the fluent constructor). No embed.
 
-import erika, {of} from "erika";
+import query, {of} from "query";
 
 type Person(name: string, age: i32)
 
@@ -27,7 +27,7 @@ val people = [
     Person(name: "Dan", age: 15),
 ];
 
-// 1) list → erika query → join: filter adults, order by name, project, join.
+// 1) list → query query → join: filter adults, order by name, project, join.
 fn adultNames() -> string {
     return of(people)
         .where({ p -> p.age >= 18 })
@@ -47,7 +47,7 @@ fn adultAgeSum() -> i32 {
         .fold(0, { acc, a -> acc + a });
 }
 
-// 3) a number list → erika → join: pipe the list through erika and join the
+// 3) a number list → query → join: pipe the list through query and join the
 //    squares of the even numbers.
 fn evenSquares() -> string {
     val nums = [1, 2, 3, 4, 5, 6, 7];
@@ -59,14 +59,14 @@ fn evenSquares() -> string {
 }
 
 // 4) the iterator methods stand alone on a list too — `map`/`join` without
-//    erika, showing the Query result and a raw `Iterator<T>` share the same
+//    query, showing the Query result and a raw `Iterator<T>` share the same
 //    vocabulary.
 fn loudNames() -> string {
     return ["ann", "cy", "dan"].map({ n -> n.toUpper() }).join(" / ");
 }
 
-// ── the `erika "…"` SQL sub-language (cross-module) ───────────────────────────
-// The same `erika` handle doubles as an embedded SQL sub-language. The quoted
+// ── the `query "…"` SQL sub-language (cross-module) ───────────────────────────
+// The same `query` handle doubles as an embedded SQL sub-language. The quoted
 // query is parsed at compile time and expanded to the fluent pipeline above; the
 // collection name `cities` is resolved in THIS caller's scope (just as `html`
 // resolves its builders), so it must be an immutable `val` — the template reads
@@ -85,7 +85,7 @@ val cities = [
 //      of(cities).where({ row -> row.pop >= 5 })
 //                .orderBy({ row -> row.name }).select({ row -> row.name }).toArray()
 fn bigCityNames() -> string {
-    val names = erika "select name from cities where pop >= 5 order by name asc";
+    val names = query "select name from cities where pop >= 5 order by name asc";
     return names.join(", ");
 }
 
@@ -93,7 +93,7 @@ fn bigCityNames() -> string {
 //    projects a tuple per row → Array<#(name: string, pop: i32)>; a lambda reads it
 //    by destructuring (`val #(name, pop) = r`).
 fn bigCityLabels() -> string {
-    val rows = erika """
+    val rows = query """
         select name, pop from cities
         where pop >= 5
         order by name asc
@@ -120,11 +120,11 @@ val boxes = [
 //    `row.w`/`row.h`), `and h > 2` adds a column-vs-literal term. Only "sq"
 //    satisfies both.
 fn squareBigBoxes() -> string {
-    val rows = erika "select label from boxes where w = h and h > 2 order by label asc";
+    val rows = query "select label from boxes where w = h and h > 2 order by label asc";
     return rows.join(",");
 }
 
-// 8) a number list consumed straight from ARGUMENT position — the `erika "…"`
+// 8) a number list consumed straight from ARGUMENT position — the `query "…"`
 //    template expands in place where the call expects an `Array<string>`.
 fn countNames(xs: Array<string>) -> i32 {
     return xs.length;
@@ -144,31 +144,31 @@ val orders = [
 // 9) a hole `${…}` is a bound value: any expression, evaluated once, typed
 //    against the field it is compared with — a parameter here.
 fn citiesAtLeast(min: i32) -> string {
-    val names = erika "select name from cities where pop >= ${min} order by name asc";
+    val names = query "select name from cities where pop >= ${min} order by name asc";
     return names.join(",");
 }
 
 // 10) `limit n` cuts the rows; `limit 1` answers one row, an optional (`?T`);
 //     the number can be a hole.
 fn biggestCity() -> string {
-    val one = erika "select name from cities order by pop desc limit 1";
+    val one = query "select name from cities order by pop desc limit 1";
     return one ?? "none";
 }
 
 fn firstCities(n: i32) -> string {
-    val some = erika "select name from cities order by name asc limit ${n}";
+    val some = query "select name from cities order by name asc limit ${n}";
     return some.join(",");
 }
 
 // 11) aggregates: `count(*)`, `sum`, `avg`, `min`, `max` — one value without
 //     `group by`.
 fn orderCount() -> i32 {
-    return erika "select count(*) from orders where total > 5";
+    return query "select count(*) from orders where total > 5";
 }
 
 // 12) `group by`: one row per key — the key and its aggregates, as a tuple.
 fn totalsByCity() -> string {
-    val rows = erika "select city, sum(total) from orders group by city order by city asc";
+    val rows = query "select city, sum(total) from orders group by city order by city asc";
     return rows
         .map({ r ->
             val #(city, total) = r;
@@ -180,7 +180,7 @@ fn totalsByCity() -> string {
 // 13) `join` (inner): every field is qualified by its collection; a row is the
 //     pair of rows the condition matches, or the fields picked from them.
 fn cityOfOrders() -> string {
-    val rows = erika "select orders.total, cities.pop from orders join cities on orders.city = cities.name where cities.pop >= 5 order by orders.total asc";
+    val rows = query "select orders.total, cities.pop from orders join cities on orders.city = cities.name where cities.pop >= 5 order by orders.total asc";
     return rows
         .map({ r ->
             val #(total, pop) = r;
@@ -209,7 +209,7 @@ test "iterator fold over the query result sums the adult ages" {
     assert adultAgeSum() == 52; // 30 + 22
 }
 
-test "a number list piped through erika, then joined" {
+test "a number list piped through query, then joined" {
     assert evenSquares() == "4-16-36"; // 2², 4², 6²
 }
 
@@ -217,32 +217,32 @@ test "iterator map/join stand alone on a list" {
     assert loudNames() == "ANN / CY / DAN";
 }
 
-test "erika \"…\" SQL sub-language runs cross-module (single-line)" {
+test "query \"…\" SQL sub-language runs cross-module (single-line)" {
     assert bigCityNames() == "Lyon, Paris";
 }
 
-test "erika \"\"\"…\"\"\" multi-line query runs cross-module" {
+test "query \"\"\"…\"\"\" multi-line query runs cross-module" {
     assert bigCityLabels() == "Lyon:5, Paris:9";
 }
 
 // ── B2 net-new gaps ──────────────────────────────────────────────────────────
 
-test "erika where compares two columns (w = h) plus a column>literal" {
+test "query where compares two columns (w = h) plus a column>literal" {
     assert squareBigBoxes() == "sq";
 }
 
-test "erika \"…\" expands in argument position" {
+test "query \"…\" expands in argument position" {
     assert countNames(
-        erika "select name from cities where pop >= 5 order by name asc",
+        query "select name from cities where pop >= 5 order by name asc",
     )
         == 2;
 }
 
-test "two erika strings in one scope expand to independent queries" {
+test "two query strings in one scope expand to independent queries" {
     // Distinct collections, distinct conditions — neither query's tree leaks
     // into the other.
-    val names = erika "select name from cities where pop >= 5 order by name asc";
-    val labels = erika "select label from boxes where w = h order by label asc";
+    val names = query "select name from cities where pop >= 5 order by name asc";
+    val labels = query "select label from boxes where w = h order by label asc";
     assert names.join(",") == "Lyon,Paris";
     assert labels.join(",") == "sq,tiny";
 }

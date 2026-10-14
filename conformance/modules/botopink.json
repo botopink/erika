@@ -3,6 +3,6 @@
   "version": "0.0.1",
   "workspaces": ["*"],
   "dependencies": {
-    "erika": { "path": "../../modules/erika" }
+    "query": { "path": "../../modules/query" }
   }
 }
