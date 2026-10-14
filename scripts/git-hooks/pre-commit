@@ -4,12 +4,21 @@
 # Self-contained: it calls scripts/gate.sh of this repository, which sources
 # scripts/git-hooks/lib/runner-standalone.sh and reaches nothing outside it, so
 # a standalone clone, a checkout inside the botopink meta workspace and a
-# worktree all run the same gate. The hook never runs conformance (decision
+# worktree all run the same gate, with two jobs. The hook never runs conformance (decision
 # 470): a front's Conformance step and CI run `scripts/gate.sh` whole.
+# Before the gate it applies `botopink format` to the commit's staged source
+# files (decision 524 — `runFormatStaged` in lib/runner-standalone.sh: the
+# staged version, into the index; formatting never fails the hook).
 # Install it once per clone:
 #
 #   git config core.hooksPath scripts/git-hooks
 set -euo pipefail
 
 echo "── pre-commit ──"
-exec "$(git rev-parse --show-toplevel)/scripts/gate.sh" --staged --no-conformance
+# shellcheck source=lib/runner-standalone.sh
+. "$(git rev-parse --show-toplevel)/scripts/git-hooks/lib/runner-standalone.sh"
+runFormatStaged
+# Two jobs: a commit's gate shares the machine with whatever else runs on it,
+# and a beam cell takes ~1.6 GB (the machine's pool is the meta repository's
+# `scripts/gate.sh exec`, which cannot hand a number to a commit).
+exec "$(git rev-parse --show-toplevel)/scripts/gate.sh" --staged --no-conformance --jobs 2

@@ -38,8 +38,10 @@ on:
     branches: [feat, main]
 
 concurrency:
-  group: test-${{ github.ref }}
-  cancel-in-progress: true
+  # decision 528: a push to feat runs in a group of its own commit, so every commit has its verdict;
+  # a pull request keeps one group and cancels its older runs
+  group: test-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 env:
   LIB_NAME: erika

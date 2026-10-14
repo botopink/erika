@@ -425,6 +425,9 @@ the same gate. Install it once per clone:
 git config core.hooksPath scripts/git-hooks
 ```
 
+The hook applies `botopink format` to the commit's staged source files before its gate (decision 524 — the
+staged version, into the index; formatting never fails it) and runs the gate with `--jobs 2`.
+
 `scripts/gate.sh [--staged] [--no-conformance] [--jobs <N>]` is the gate's one entry (one text in every
 library repository, CI check 4; it runs `scripts/git-hooks/lib/runner-standalone.sh`): the pre-commit hook
 runs `scripts/gate.sh --staged --no-conformance` (decision 470), and CI on a push to `feat` and a front's

@@ -54,6 +54,11 @@
 # after them depends on them); stages 4–6 all run, every red is listed, and the
 # gate fails at the end — one run tells the whole truth.
 #
+# `botopink format` is applied, never checked (decision 524): no stage fails on
+# a file that is not canonical. The pre-commit hook calls `runFormatStaged`
+# before the gate, which formats the version of each staged source file that
+# enters the commit and writes the result into the index (§ runFormatStaged).
+#
 # The functions `requireBotopink`, `runRepositoryStagesGate`, `runTestsGate`,
 # `runExamplesGate`, `runRefusalsGate` and `runConformanceGate` are also what
 # `scripts/check-refusals.sh` calls: they report their reds and return non-zero.
@@ -242,8 +247,8 @@ runRepositoryStagesGate() {
 
 # ── the cell pool ────────────────────────────────────────────────────────────
 # Stages 4 and 5 run their cells side by side: one per CPU, bounded by
-# `MemAvailable / 768 MiB` (a `botopink` child plus its `erl`/`node` peaks at a
-# few hundred MB), and a cell starts only while the machine's runnable threads
+# `MemAvailable / 1664 MiB` (a `botopink` child plus its `erl`/`node`: a beam
+# cell was measured at ~1.6 GB; 768 MiB let one hook exhaust the machine), and a cell starts only while the machine's runnable threads
 # (`procs_running`, the 4th field of /proc/loadavg) are at most its CPUs —
 # other gates may share the machine. The two cells of one member are safe side
 # by side: `botopink test` writes to its own per-run directory and hands each
@@ -262,7 +267,7 @@ gateJobs() {
     jobs=$(gateCpus)
     avail_kb=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null || true)
     if [ -n "$avail_kb" ]; then
-        by_mem=$(( avail_kb / (768 * 1024) ))
+        by_mem=$(( avail_kb / (1664 * 1024) ))
         [ "$by_mem" -ge 1 ] || by_mem=1
         [ "$by_mem" -lt "$jobs" ] && jobs=$by_mem
     fi
@@ -496,6 +501,93 @@ runConformanceGate() {
     echo "  re-run: ( cd $gate_root && $bin cell check conformance/ )"
     echo -e "${RED}✗ $(basename "$gate_root"): conformance gate failed${NC}"
     return 1
+}
+
+# runFormatStaged — `botopink format` applied to the commit (decision 524), by
+# the pre-commit hook before the gate; never a gate stage, and never a red:
+#
+#   1. the staged source files (`.bp`, `.d.bp`, `.bpp`, `.botopink`; added,
+#      copied, modified or renamed) are checked out of the index into a scratch
+#      tree (`git checkout-index --prefix`), with the `snapshot/output/` files of
+#      every directory above them;
+#   2. `botopink format .` walks the scratch tree — the walk of the checkout, so
+#      its structural exemptions hold (a hidden directory, `node_modules`, a
+#      conformance cell's module whose `snapshot/output/<module>.snap` holds a
+#      `refused` record);
+#   3. a staged file the formatter changed is written as a blob and replaces the
+#      staged one in the committing index (`GIT_INDEX_FILE`: `git commit -a`
+#      included; under `git commit <path>` the real index git writes beside it,
+#      `index.lock`, takes it too);
+#   4. the working-tree file takes the formatted text only when it holds exactly
+#      the staged text: unstaged changes are never pulled in, and stay untouched.
+#
+# The compiler is `locateBotopink`'s. No compiler, or a file that does not
+# parse, leaves the staged files as written — the gate reports the compiler, and
+# a parse error is the tests' to report.
+runFormatStaged() {
+    local list bin scratch dirs out esc status=0
+    list=$(git -C "$gate_root" diff --cached --name-only --diff-filter=ACMR -- '*.bp' '*.bpp' '*.botopink')
+    [ -n "$list" ] || return 0
+    echo "── botopink format: the staged source files (decision 524) ──"
+    if ! bin=$(locateBotopink); then
+        echo "format: no compiler found — the staged files are committed as written" >&2
+        return 0
+    fi
+    scratch=$(mktemp -d "${TMPDIR:-/tmp}/bp-format-staged.XXXXXX")
+
+    dirs=$(printf '%s\n' "$list" | while IFS= read -r f; do
+        d=$(dirname "$f")
+        while :; do
+            if [ "$d" = . ]; then printf 'snapshot/output\n'; break; fi
+            printf '%s/snapshot/output\n' "$d"
+            d=$(dirname "$d")
+        done
+    done | sort -u)
+    if ! {
+        printf '%s\n' "$list"
+        printf '%s\n' "$dirs" | while IFS= read -r d; do git -C "$gate_root" ls-files -- "$d"; done
+    } | sort -u | (cd "$gate_root" && git checkout-index --prefix="$scratch/" --stdin); then
+        echo "format: could not check the staged files out of the index — committed as written" >&2
+        rm -rf "$scratch"
+        return 0
+    fi
+
+    out=$(cd "$scratch" && "$bin" format . 2>&1) || status=$?
+    if [ "$status" -ne 0 ]; then
+        esc="$(printf '\033')"
+        printf '%s\n' "$out" | grep -vE "^[[:space:]]*(${esc}\[[0-9;]*m)?(Unchanged|Formatted)" >&2 || true
+        echo "format: the files named above are committed as written" >&2
+    fi
+
+    local f mode old new partial_index="" changed=0
+    case "${GIT_INDEX_FILE:-}" in
+        */next-index-*.lock)
+            partial_index="$(dirname "$GIT_INDEX_FILE")/index.lock"
+            [ -f "$partial_index" ] || partial_index="" ;;
+    esac
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        read -r mode old _ < <(git -C "$gate_root" ls-files -s -- "$f") || continue
+        case "$mode" in 100644|100755) ;; *) continue ;; esac
+        [ -f "$scratch/$f" ] || continue
+        new=$(git -C "$gate_root" hash-object -w --no-filters -- "$scratch/$f")
+        [ "$new" != "$old" ] || continue
+        git -C "$gate_root" update-index --cacheinfo "$mode,$new,$f"
+        if [ -n "$partial_index" ] &&
+            [ "$(GIT_INDEX_FILE="$partial_index" git -C "$gate_root" ls-files -s -- "$f" | cut -d' ' -f2)" = "$old" ]; then
+            GIT_INDEX_FILE="$partial_index" git -C "$gate_root" update-index --cacheinfo "$mode,$new,$f"
+        fi
+        if [ -f "$gate_root/$f" ] && [ "$(git -C "$gate_root" hash-object --no-filters -- "$gate_root/$f")" = "$old" ]; then
+            cp "$scratch/$f" "$gate_root/$f"
+            echo "  formatted $f"
+        else
+            echo "  formatted $f (in the index; its unstaged changes stay in the working tree)"
+        fi
+        changed=$((changed + 1))
+    done <<<"$list"
+    rm -rf "$scratch"
+    [ "$changed" -eq 0 ] || echo "format: $changed staged file(s) formatted into the commit"
+    return 0
 }
 
 # runStandaloneGate [--staged] [--no-conformance] [--jobs <N>] — the gate: the
