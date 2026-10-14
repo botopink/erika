@@ -20,13 +20,13 @@
 #      stages        repository tracks one: the checks only this repository has;
 #   4. tests         `botopink test --target <t>` in every workspace member, on
 #                    every target the member's manifest declares;
-#   5. examples      `botopink build --target <t>` of every `examples/*/`, on
+#   5. examples      `botopink build --target <t>` of every `examples/*/` and `examples/*/*/`, on
 #                    every target its manifest declares;
-#   6. refusals      every `refusals/*/` project is refused by `botopink check`
+#   6. refusals      every `refusals/*/` and `refusals/*/*/` project is refused by `botopink check`
 #                    with the lines of its `expect.txt`, when the repository has
 #                    a `refusals/` directory;
 #   7. conformance   `botopink cell check conformance/` (decisions 463, 464):
-#                    every `conformance/modules/*/` cell on the targets it
+#                    every `conformance/<package>/*/` cell on the targets it
 #                    declares; a mismatch writes a `.snap.new` candidate and is
 #                    red. Skipped by `--no-conformance` (the hook's, decision
 #                    470), which prints that it was not run.
@@ -174,6 +174,17 @@ workspaceMembers() {
     elif [ -n "$(cd "$gate_root" && find src test -name '*.bp' ! -name '*.d.bp' 2>/dev/null | head -1)" ]; then
         echo "$gate_root"
     fi
+}
+
+# projectsUnder <dir> — the projects of a per-package tree, one per line: every
+# `<dir>/<name>/` and `<dir>/<package>/<name>/` that holds a `botopink.json`
+# (rakun's examples and refusals sit beside their package, one folder each).
+projectsUnder() {
+    local d
+    for d in "$gate_root/$1"/*/ "$gate_root/$1"/*/*/; do
+        [ -f "${d}botopink.json" ] && echo "${d%/}"
+    done
+    return 0
 }
 
 # stripColours — stdin to stdout without ANSI colour sequences (the escape byte
@@ -385,9 +396,7 @@ runExamplesGate() {
     local d rel target dir i builds=0 bad=""
     dir=$(mktemp -d)
     : >"$dir/plan"
-    for d in "$gate_root"/examples/*/; do
-        [ -f "${d}botopink.json" ] || continue
-        d="${d%/}"
+    for d in $(projectsUnder examples); do
         for target in $(manifestTargets "$d/botopink.json"); do
             [ -z "$only" ] || [ "$target" = "$only" ] || continue
             builds=$((builds + 1))
@@ -396,10 +405,8 @@ runExamplesGate() {
     done
     gatePool "$dir" build "$bin"
     i=0
-    for d in "$gate_root"/examples/*/; do
-        [ -f "${d}botopink.json" ] || continue
-        d="${d%/}"
-        rel="examples/$(basename "$d")"
+    for d in $(projectsUnder examples); do
+        rel="${d#"$gate_root"/}"
         for target in $(manifestTargets "$d/botopink.json"); do
             [ -z "$only" ] || [ "$target" = "$only" ] || continue
             i=$((i + 1))
@@ -434,10 +441,8 @@ runRefusalsGate() {
     local bin="$1"
     [ -d "$gate_root/refusals" ] || return 0
     local dir rel out line missing cases=0 bad=""
-    for dir in "$gate_root"/refusals/*/; do
-        [ -f "${dir}botopink.json" ] || continue
-        dir="${dir%/}"
-        rel="refusals/$(basename "$dir")"
+    for dir in $(projectsUnder refusals); do
+        rel="${dir#"$gate_root"/}"
         cases=$((cases + 1))
         echo -n "  Refusing $rel (botopink check)... "
         if [ ! -f "$dir/expect.txt" ]; then
@@ -476,16 +481,16 @@ runRefusalsGate() {
 # runConformanceGate <botopink-bin>
 #
 # Stage 7 (decisions 463, 464): `botopink cell check conformance/` — every cell
-# under `conformance/modules/*/` is built and run on every target it declares
+# under `conformance/<package>/*/` is built and run on every target it declares
 # and compared with its accepted snapshots; a difference writes a `.snap.new`
 # candidate beside the snapshot and is red, and a person accepts it by renaming.
-# The stage exists when `conformance/modules/` holds a cell (a directory with
+# The stage exists when `conformance/` holds a cell (a directory with
 # `src/`); with none, there is nothing to check and the stage is green.
 runConformanceGate() {
     local bin="$1"
     [ -d "$gate_root/conformance" ] || return 0
     # No cell yet (a `conformance/` that holds only `docs.md`) is nothing to check.
-    [ -n "$(find "$gate_root/conformance/modules" -type d -name src -print -quit 2>/dev/null)" ] || return 0
+    [ -n "$(find "$gate_root/conformance" -type d -name src -print -quit 2>/dev/null)" ] || return 0
     echo -n "  Checking conformance/ (botopink cell check)... "
     local log
     log=$(mktemp)
