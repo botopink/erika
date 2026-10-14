@@ -27,7 +27,7 @@ val people = [
     Person(name: "Dan", age: 15),
 ];
 
-// 1) list → query query → join: filter adults, order by name, project, join.
+// 1) list → query → join: filter adults, order by name, project, join.
 fn adultNames() -> string {
     return of(people)
         .where({ p -> p.age >= 18 })

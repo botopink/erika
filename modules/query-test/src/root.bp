@@ -53,14 +53,14 @@ val owners = [
     Owner(owner: "dan", city: "Rome"),
 ];
 
-test "query query: limit n keeps an array and cuts it" {
+test "query: limit n keeps an array and cuts it" {
     val two = query "select name from cities order by name asc limit 2";
     assert two.join(",") == "Lyon,Nice";
     val all = query "select * from cities limit 5";
     assert all.length == 3;
 }
 
-test "query query: limit 1 answers one row, an optional" {
+test "query: limit 1 answers one row, an optional" {
     val one = query "select name from cities order by pop desc limit 1";
     assert one ?? "none" == "Paris";
     val row = query "select * from cities where pop > 100 limit 1";
@@ -69,13 +69,13 @@ test "query query: limit 1 answers one row, an optional" {
     assert city?.pop ?? -1 == 5;
 }
 
-test "query query: limit takes a hole, the number of rows" {
+test "query: limit takes a hole, the number of rows" {
     val n = 2;
     val two = query "select name from cities order by name asc limit ${n}";
     assert two.join(",") == "Lyon,Nice";
 }
 
-test "query query: aggregates without group by answer one value" {
+test "query: aggregates without group by answer one value" {
     val n = query "select count(*) from cities where pop >= 5";
     assert n == 2;
     val total = query "select sum(pop) from cities";
@@ -88,14 +88,14 @@ test "query query: aggregates without group by answer one value" {
     assert mean == 2.0;
 }
 
-test "query query: several aggregates answer a tuple" {
+test "query: several aggregates answer a tuple" {
     val both = query "select count(*), sum(amount) from sales where amount > 5";
     val #(n, total) = both;
     assert n == 3;
     assert total == 23;
 }
 
-test "query query: group by yields one row per key with its aggregates" {
+test "query: group by yields one row per key with its aggregates" {
     val rows = query "select region, count(*), sum(amount) from sales group by region order by region asc";
     val labels = rows.map({ r ->
         val #(region, n, total) = r;
@@ -104,7 +104,7 @@ test "query query: group by yields one row per key with its aggregates" {
     assert labels.join(",") == "east:1:7,north:2:16,south:1:4";
 }
 
-test "query query: group by after where, with limit" {
+test "query: group by after where, with limit" {
     val rows = query "select region, max(amount) from sales where amount >= 6 group by region order by region desc limit 2";
     val labels = rows.map({ r ->
         val #(a, b) = r;
@@ -114,12 +114,12 @@ test "query query: group by after where, with limit" {
     assert labels.join(",") == "north:10,east:7";
 }
 
-test "query query: group by alone lists the keys" {
+test "query: group by alone lists the keys" {
     val keys = query "select region from sales group by region order by region asc";
     assert keys.join(",") == "east,north,south";
 }
 
-test "query query: join pairs rows by a condition (inner)" {
+test "query: join pairs rows by a condition (inner)" {
     val pairs = query "select owners.owner, cities.pop from owners join cities on owners.city = cities.name where cities.pop >= 5 order by owners.owner asc";
     val labels = pairs.map({ r ->
         val #(owner, pop) = r;
@@ -128,7 +128,7 @@ test "query query: join pairs rows by a condition (inner)" {
     assert labels.join(",") == "ana:9,bob:5,cy:9";
 }
 
-test "query query: join with * yields the pair of rows" {
+test "query: join with * yields the pair of rows" {
     val pairs = query "select * from owners join cities on cities.name = owners.city order by owners.owner desc limit 1";
     val #(o, c) = pairs ?? #(
         Owner(owner: "", city: ""),
@@ -138,7 +138,7 @@ test "query query: join with * yields the pair of rows" {
     assert c.pop == 9;
 }
 
-test "query query: join counts" {
+test "query: join counts" {
     val n = query "select count(*) from owners join cities on owners.city = cities.name";
     assert n == 3;
     val big = query "select count(*) from owners join cities on owners.city = cities.name where cities.pop >= 9";
@@ -183,7 +183,7 @@ test "query-test: a QueryContext of its own runs a statement" {
     assert refused.isError();
 }
 
-test "query query: holes bind in a join, a group and a limit together" {
+test "query: holes bind in a join, a group and a limit together" {
     val min = 5;
     val cap = 1;
     val rows = query "select owners.owner from owners join cities on owners.city = cities.name where cities.pop >= ${min} order by owners.owner asc limit ${cap}";
