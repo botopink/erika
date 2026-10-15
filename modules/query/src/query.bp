@@ -526,7 +526,7 @@ pub default fn query<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
             false
         else
             txt.slice(0, 10) == "__bp_hole_";
-        out;
+        out
     };
 
     // A comparison group's tokens → a flat comparison tuple (`left [op right]`).
@@ -572,7 +572,7 @@ pub default fn query<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
             cnt >= 3,
             lTok.2,
             rTok.2,
-        );
+        )
     };
 
 
@@ -1055,7 +1055,7 @@ pub default fn query<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
                 rv + "." + side + "." + fld
             else
                 rv + "." + fld;
-            out;
+            out
         };
         // The collection a field belongs to, as a column: its element type is
         // the type the field is compared against.
@@ -1065,7 +1065,7 @@ pub default fn query<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
             val qual = ps.at(0) ?? "";
             val fld = ps.at(np - 1) ?? "";
             val coll = if (np == 2) qual else src;
-            coll + ".map({ row -> row." + fld + " })";
+            coll + ".map({ row -> row." + fld + " })"
         };
         val operandCode = { knd, txt, span ->
             val isHole = isHolePlaceholder(txt);
@@ -1077,7 +1077,7 @@ pub default fn query<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
                 txt
             else
                 fieldCode(txt, span, "row");
-            out;
+            out
         };
         val opCode = { opText ->
             val out = if (opText == "=")
@@ -1086,14 +1086,14 @@ pub default fn query<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
                 "!="
             else
                 opText;
-            out;
+            out
         };
         val cmpCode = { cmp ->
             val lc = operandCode(cmp.0, cmp.1, cmp.7);
             val rc = operandCode(cmp.4, cmp.5, cmp.8);
             val oc = opCode(cmp.2);
             val out = if (cmp.6) lc + " " + oc + " " + rc else lc;
-            out;
+            out
         };
         // ③ the pipeline. `join` pairs every source row with the rows of the
         // joined collection its condition matches (inner): a row is then
@@ -1200,7 +1200,7 @@ pub default fn query<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
                 "aggMin(" + qv + ", " + lam + ")"
             else
                 "aggMax(" + qv + ", " + lam + ")";
-            out;
+            out
         };
         if (hasAgg)
             if (!hasGroup) {
@@ -1224,7 +1224,7 @@ pub default fn query<T>(comptime q: @Expr<string>) -> @ExprCustom<T> {
                     "g.key"
                 else
                     aggOn(i1, "groupRows(g)", "row");
-                out;
+                out
             };
             val sel = if (items.length == 1)
                 groupItem(items.at(0) ?? #("", "", "", Span(0, 0, 1)))
